@@ -248,24 +248,22 @@
             <div class="grid-3">
                 <div class="glass-card stat-box">
                     <h3>Available Elite IPs</h3>
-                    <div class="number" id="stat-ips">8,402</div>
+                    <div class="number" id="stat-ips">0</div>
                 </div>
                 <div class="glass-card stat-box">
                     <h3>Active Clients</h3>
-                    <div class="number" id="stat-clients" style="text-shadow: 0 0 15px var(--neon-cyan);">3</div>
+                    <div class="number" id="stat-clients" style="text-shadow: 0 0 15px var(--neon-cyan);">0</div>
                 </div>
                 <div class="glass-card stat-box">
                     <h3>Network Health</h3>
-                    <div class="number" id="stat-health" style="text-shadow: 0 0 15px #00ff00;">99%</div>
+                    <div class="number" id="stat-health" style="text-shadow: 0 0 15px #00ff00;">100%</div>
                 </div>
             </div>
 
             <div class="glass-card">
                 <h3 style="margin-bottom: 15px; color: var(--text-muted);">Live Traffic Monitor</h3>
                 <div class="terminal" id="traffic-monitor">
-                    <p class="log-info">[SYSTEM] Command Center initialized.</p>
-                    <p>[GATEWAY] Tunnel established for Client Slot 1 -> target: instagram.com (0.14s)</p>
-                    <p>[GATEWAY] Tunnel established for Client Slot 2 -> target: amazon.com (0.89s)</p>
+                    <p class="log-info">[SYSTEM] Command Center connected to local FastAPI server.</p>
                 </div>
             </div>
         </div>
@@ -277,18 +275,14 @@
             <div class="glass-card">
                 <h3 style="margin-bottom: 15px; color: var(--neon-cyan);">Master 1 & 2: Hunter & Inspector</h3>
                 <div class="terminal" style="height: 150px; margin-bottom: 20px;">
-                    <p class="log-info">[HUNTER] Scraping nodes from 50 sources...</p>
-                    <p>[HUNTER] Found 12,000 raw IPs. Passing to Inspector.</p>
-                    <p class="log-info">[INSPECTOR] Verifying anonymity headers...</p>
-                    <p>[INSPECTOR] 850 Elite IPs secured. Stored in Vault 0.</p>
+                    <p class="log-info">[HUNTER] Active supply chain scanning routine...</p>
+                    <p>[INSPECTOR] Anonymity and SSRF filter checks running in background.</p>
                 </div>
 
                 <h3 style="margin-bottom: 15px; color: var(--neon-purple);">Master 3 & 4: Vault Doctor & Gateway</h3>
                 <div class="terminal" style="height: 150px;">
-                    <p class="log-info">[DOCTOR] Commencing maintenance cycle...</p>
-                    <p>[DOCTOR] Purged 120 stale IPs. Vault Health: 98%.</p>
-                    <p class="log-info">[GATEWAY] SSRF Shield Active. Monitoring payloads.</p>
-                    <p class="log-warn">[GATEWAY] SSRF Attack Blocked! Source: Unknown, Target: 127.0.0.1</p>
+                    <p class="log-info">[DOCTOR] Periodic purge and atomic vault rotation active.</p>
+                    <p class="log-info">[GATEWAY] DDoS Shield and Header Sanitizer fully operational.</p>
                 </div>
             </div>
         </div>
@@ -300,7 +294,7 @@
             <div class="glass-card">
                 <h3 style="margin-bottom: 15px;">Generate New API Key</h3>
                 <div class="input-group">
-                    <input type="password" id="adminKey" placeholder="Enter Master Admin Key (Required)">
+                    <input type="password" id="adminKey" placeholder="Enter Master Admin Key (Required)" oninput="loadActiveKeys()">
                     <input type="text" id="clientName" placeholder="Enter Client / Software Name">
                     <button class="btn" onclick="generateKey()">Generate Key</button>
                 </div>
@@ -320,16 +314,7 @@
                     </thead>
                     <tbody id="client-list">
                         <tr>
-                            <td>Vercel Video Downloader</td>
-                            <td>ns_4f8a29b1...</td>
-                            <td style="color: #00ff00;">Active</td>
-                            <td><button class="btn btn-danger" style="padding: 5px 10px; font-size: 0.8rem;">Revoke</button></td>
-                        </tr>
-                        <tr>
-                            <td>SEO Scraper Bot</td>
-                            <td>ns_9c2d77e4...</td>
-                            <td style="color: #00ff00;">Active</td>
-                            <td><button class="btn btn-danger" style="padding: 5px 10px; font-size: 0.8rem;">Revoke</button></td>
+                            <td colspan="4" style="text-align: center; color: var(--text-muted);">Enter Master Admin Key above to load active clients.</td>
                         </tr>
                     </tbody>
                 </table>
@@ -338,8 +323,10 @@
 
     </div>
 
-    <!-- UI Logic -->
+    <!-- UI Logic & Real Backend Integration -->
     <script>
+        const API_BASE = "http://localhost:8000";
+
         // Tab Switching Logic
         function switchTab(tabId) {
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
@@ -347,10 +334,30 @@
             
             document.getElementById(tabId).classList.add('active');
             event.currentTarget.classList.add('active');
+
+            if(tabId === 'control') {
+                loadActiveKeys();
+            } else if(tabId === 'dashboard') {
+                loadSystemHealth();
+            }
         }
 
-        // Mock Function for Generating Key (Will connect to main.py API later)
-        function generateKey() {
+        // 1. Fetch Real System Health for Dashboard
+        async function loadSystemHealth() {
+            try {
+                const response = await fetch(`${API_BASE}/gateway/health`);
+                const data = await response.json();
+                if(response.ok) {
+                    document.getElementById('stat-ips').innerText = data.available_ips || 0;
+                    document.getElementById('stat-clients').innerText = data.active_clients || 0;
+                }
+            } catch (e) {
+                console.error("Backend offline or unreachable:", e);
+            }
+        }
+
+        // 2. Real API Key Generation (Connected to main.py /admin/keys/generate)
+        async function generateKey() {
             const adminKey = document.getElementById('adminKey').value;
             const clientName = document.getElementById('clientName').value;
             const resultBox = document.getElementById('key-result');
@@ -362,23 +369,75 @@
                 return;
             }
 
-            // Simulating API Call
             resultBox.style.color = 'var(--neon-cyan)';
-            resultBox.innerText = "Processing secure generation...";
+            resultBox.innerText = "Communicating with secure Vault...";
             resultBox.style.display = 'block';
 
-            setTimeout(() => {
-                const mockKey = "ns_" + Math.random().toString(36).substring(2, 15);
-                resultBox.innerHTML = `Success! New API Key for <b>${clientName}</b>:<br><br> <span style="color:#fff; background:#222; padding:5px 10px; border-radius:4px; font-family:monospace;">${mockKey}</span> <br><br> <small style="color:var(--text-muted)">* Save this key now. It will not be shown again.</small>`;
-                
-                // Add to table
-                const table = document.getElementById('client-list');
-                const row = `<tr><td>${clientName}</td><td>${mockKey.substring(0, 11)}...</td><td style="color: #00ff00;">Active</td><td><button class="btn btn-danger" style="padding: 5px 10px; font-size: 0.8rem;">Revoke</button></td></tr>`;
-                table.innerHTML += row;
-                
-                document.getElementById('clientName').value = '';
-            }, 800);
+            try {
+                const response = await fetch(`${API_BASE}/admin/keys/generate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Admin-Key': adminKey
+                    },
+                    body: JSON.stringify({ client_name: clientName })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    resultBox.innerHTML = `Success! New API Key generated for <b>${data.client_name}</b>:<br><br> <span style="color:#fff; background:#222; padding:5px 10px; border-radius:4px; font-family:monospace;">${data.api_key}</span> <br><br> <small style="color:var(--text-muted)">* Save this key now. It is locked securely in Redis DB 1.</small>`;
+                    document.getElementById('clientName').value = '';
+                    loadActiveKeys(); // Refresh the table
+                } else {
+                    resultBox.style.color = '#ff3333';
+                    resultBox.innerText = `Access Denied: ${data.detail || 'Invalid Admin Key'}`;
+                }
+            } catch (error) {
+                resultBox.style.color = '#ff3333';
+                resultBox.innerText = "Error: Could not connect to Python backend server.";
+            }
         }
+
+        // 3. Load Active Keys from Redis DB 1
+        async function loadActiveKeys() {
+            const adminKey = document.getElementById('adminKey').value;
+            if(!adminKey) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/admin/keys/list`, {
+                    method: 'GET',
+                    headers: { 'X-Admin-Key': adminKey }
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    const table = document.getElementById('client-list');
+                    table.innerHTML = '';
+                    
+                    if(data.active_clients.length === 0) {
+                        table.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No active clients found in Redis.</td></tr>`;
+                        return;
+                    }
+
+                    data.active_clients.forEach(client => {
+                        const row = `<tr>
+                            <td>${client.client_name}</td>
+                            <td>${client.key_prefix}</td>
+                            <td style="color: #00ff00;">Active</td>
+                            <td><span style="color:var(--text-muted); font-size:0.8rem;">Secured</span></td>
+                        </tr>`;
+                        table.innerHTML += row;
+                    });
+                }
+            } catch (e) {
+                console.error("Failed to load active keys");
+            }
+        }
+
+        // Auto-refresh health stats every 10 seconds
+        setInterval(loadSystemHealth, 10000);
+        loadSystemHealth();
     </script>
 </body>
 </html>
