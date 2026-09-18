@@ -1,32 +1,54 @@
 import asyncio
 import httpx
 import time
+import os
+import sys
+import logging
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse
 import redis.asyncio as redis
 from cryptography.fernet import Fernet
-import os
-import logging
 from urllib.parse import urlparse
 
+# Security Guard: Block execution if run as root user
+def enforce_security_guard():
+    if os.name == 'posix' and os.geteuid() == 0:
+        print("[CRITICAL SECURITY ERROR] Running engine as 'ROOT' is strictly forbidden!")
+        sys.exit(1)
+
+enforce_security_guard()
+
+# Professional logging setup for Engine 4 Ultra-Gateway
 logging.basicConfig(
     level=logging.INFO, 
     format='%(asctime)s - [ENGINE-4: ULTRA-GATEWAY] - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
-app = FastAPI(title="NanoStream 4X Gateway", version="5.1.0")
+app = FastAPI(title="NanoStream 4X Gateway", version="5.4.0")
 
-ENCRYPTION_KEY = os.environ.get("PROXY_ENCRYPTION_KEY", Fernet.generate_key().decode('utf-8'))
+# Enterprise-Grade Fixed Shared Encryption Key synchronized with Engines 2 and 3
+DEFAULT_FIXED_KEY = "W3z9Lp7m1n4b6v8c0x3z5l7j9h1g3f5d7s9a2p4q6w8="
+ENCRYPTION_KEY = os.environ.get("PROXY_ENCRYPTION_KEY", DEFAULT_FIXED_KEY)
 cipher_suite = Fernet(ENCRYPTION_KEY.encode('utf-8'))
 
-redis_pool_proxies = redis.ConnectionPool(host='127.0.0.1', port=6379, db=0, max_connections=100)
-redis_pool_keys = redis.ConnectionPool(host='127.0.0.1', port=6379, db=1, decode_responses=True, max_connections=100)
+# Secure environment-driven Redis configuration
+REDIS_HOST = os.environ.get("REDIS_HOST", "127.0.0.1")
+REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
+REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD", None)
+
+redis_pool_proxies = redis.ConnectionPool(
+    host=REDIS_HOST, port=REDIS_PORT, db=0, password=REDIS_PASSWORD, max_connections=100
+)
+redis_pool_keys = redis.ConnectionPool(
+    host=REDIS_HOST, port=REDIS_PORT, db=1, password=REDIS_PASSWORD, decode_responses=True, max_connections=100
+)
 
 redis_vault_proxies = redis.Redis(connection_pool=redis_pool_proxies)
 redis_vault_keys = redis.Redis(connection_pool=redis_pool_keys)
 
 async def emit_gateway_telemetry(status: str, client_slot: str, target_domain: str, execution_time: float):
+    """Safely broadcasts real-time routing telemetry to the WebSocket UI dashboard."""
     if hasattr(app.state, 'ui_broadcast') and app.state.ui_broadcast:
         payload = {
             "engine": "master_4_gateway",
@@ -40,9 +62,11 @@ async def emit_gateway_telemetry(status: str, client_slot: str, target_domain: s
         except Exception:
             pass
 
+# Block internal network access to prevent Server-Side Request Forgery (SSRF) vulnerabilities
 BLOCKED_INTERNAL_HOSTS = {'localhost', '127.0.0.1', '0.0.0.0', '169.254.169.254'}
 
 def url_sentinel_shield(target_url: str, client_slot: str) -> str:
+    """Validates target URL and blocks unauthorized internal network requests."""
     try:
         parsed_url = urlparse(target_url)
         hostname = parsed_url.hostname.lower() if parsed_url.hostname else "unknown_domain"
@@ -58,6 +82,7 @@ def url_sentinel_shield(target_url: str, client_slot: str) -> str:
         raise HTTPException(status_code=400, detail="Bad Request: Malformed or invalid target URL detected.")
 
 def sanitize_headers(original_headers: dict) -> dict:
+    """Strips sensitive tracking headers and normalizes User-Agent for seamless camouflaging."""
     safe_headers = dict(original_headers)
     suspicious_tags = ['host', 'x-forwarded-for', 'x-real-ip', 'x-vercel-id', 'cf-connecting-ip', 'via']
     for tag in suspicious_tags:
@@ -67,6 +92,7 @@ def sanitize_headers(original_headers: dict) -> dict:
     return safe_headers
 
 async def proxy_stream_generator(client: httpx.AsyncClient, response: httpx.Response):
+    """Streams proxy response chunks securely and ensures clean resource closure."""
     try:
         async for chunk in response.aiter_bytes(chunk_size=65536):
             yield chunk
@@ -88,6 +114,7 @@ async def gateway_proxy_handler(
     background_tasks: BackgroundTasks, 
     target_url: str
 ):
+    """Main high-performance proxy routing endpoint with API key authentication, Fernet decryption, and SSRF defense."""
     start_time = time.time()
 
     x_api_key = request.headers.get("x-api-key") or request.headers.get("X-API-Key")
@@ -140,6 +167,7 @@ async def gateway_proxy_handler(
 
 @app.get("/health")
 async def health_check():
+    """System health check endpoint returning live vault metrics and active client counts."""
     vault_count = await redis_vault_proxies.scard("vip_proxy_pool")
     active_keys_count = len(await redis_vault_keys.keys("api_key:*"))
     return {
