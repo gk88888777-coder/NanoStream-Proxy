@@ -50,9 +50,16 @@ class ProxyInspector:
         Verifies if the proxy can successfully route traffic and mask the origin.
         """
         proxy_url = f"http://{raw_ip}"
+        
         try:
-            proxies = {"http://": proxy_url, "https://": proxy_url}
-            async with httpx.AsyncClient(proxies=proxies, timeout=5.0) as client:
+            # Modern HTTPX syntax with verify=False to prevent false negatives on free proxies
+            async with httpx.AsyncClient(
+                proxy=proxy_url, 
+                timeout=5.0, 
+                verify=False, 
+                follow_redirects=True
+            ) as client:
+                
                 response = await client.get(self.anonymity_test_url)
                 
                 if response.status_code == 200:
@@ -60,13 +67,13 @@ class ProxyInspector:
                     returned_ip = data.get("origin", "")
                     
                     ip_only = raw_ip.split(':')[0]
+                    # Verify if the proxy successfully masked the origin IP
                     if returned_ip and (ip_only in returned_ip or len(returned_ip) > 6):
                         return raw_ip
                         
-        except (httpx.TimeoutException, httpx.RequestError, asyncio.TimeoutError):
+        except Exception:
+            # Silently ignore connection timeouts, SSL errors, or dead proxies
             pass
-        except Exception as e:
-            logging.debug(f"Unexpected error testing proxy {raw_ip}: {str(e)}")
             
         return None
 
@@ -94,11 +101,11 @@ class ProxyInspector:
         # Live Telemetry: Inspection started broadcast to UI
         await self._emit_telemetry(status="inspection_started", tested=total_raw, passed=0)
 
-        # High-concurrency asynchronous task execution
+        # High-concurrency asynchronous task execution for rapid validation
         tasks = [self._test_single_proxy(ip) for ip in raw_ips_list]
         tested_results = await asyncio.gather(*tasks, return_exceptions=True)
 
-        # Filter out dead proxies and exceptions safely
+        # Filter out dead proxies and safely gather only the elite IPs
         elite_ips = []
         for res in tested_results:
             if isinstance(res, str):
@@ -107,7 +114,7 @@ class ProxyInspector:
         total_elite = len(elite_ips)
         logging.info(f"Inspection complete. {total_elite} Elite IPs passed the test. Securing vault...")
 
-        # Store verified elite proxies concurrently in Redis
+        # Concurrently store verified elite proxies in the Redis Vault
         if total_elite > 0:
             store_tasks = [self._secure_and_store(ip) for ip in elite_ips]
             await asyncio.gather(*store_tasks, return_exceptions=True)
@@ -115,7 +122,7 @@ class ProxyInspector:
         execution_time = time.time() - start_time
         logging.info(f"Vault updated. Cycle completed in {round(execution_time, 2)} seconds.")
         
-        # Live Telemetry: Inspection completed broadcast to UI with final stats
+        # Live Telemetry: Inspection completed broadcast to UI with final metrics
         await self._emit_telemetry(
             status="inspection_completed", 
             tested=total_raw, 
