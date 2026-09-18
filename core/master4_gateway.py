@@ -1,7 +1,7 @@
 import asyncio
 import httpx
 import time
-from fastapi import FastAPI, Header, HTTPException, Request, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from fastapi.responses import StreamingResponse
 import redis.asyncio as redis
 from cryptography.fernet import Fernet
@@ -16,7 +16,7 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
-app = FastAPI(title="NanoStream 4X Gateway", version="3.0.0")
+app = FastAPI(title="NanoStream 4X Gateway", version="3.0.2")
 
 ENCRYPTION_KEY = os.environ.get("PROXY_ENCRYPTION_KEY", Fernet.generate_key().decode('utf-8'))
 cipher_suite = Fernet(ENCRYPTION_KEY.encode('utf-8'))
@@ -66,16 +66,27 @@ def sanitize_headers(original_headers: dict) -> dict:
     safe_headers['User-Agent'] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     return safe_headers
 
+# Safe Streaming Generator to prevent connection premature close
+async def proxy_stream_generator(client: httpx.AsyncClient, response: httpx.Response):
+    try:
+        async for chunk in response.aiter_bytes():
+            yield chunk
+    finally:
+        await response.aclose()
+        await client.aclose()
+
 # ----------------- MAIN PROXY ENDPOINT -----------------
 
 @app.get("/proxy")
 async def gateway_proxy_handler(
     request: Request, 
     background_tasks: BackgroundTasks, 
-    target_url: str, 
-    x_api_key: str = Header(None)
+    target_url: str
 ):
     start_time = time.time()
+
+    # Safely extract x-api-key directly from request headers (Case-Insensitive)
+    x_api_key = request.headers.get("x-api-key") or request.headers.get("X-API-Key")
 
     # 1. Dynamic Zero Trust Authentication (Reads directly from DB 1)
     if not x_api_key:
@@ -109,22 +120,23 @@ async def gateway_proxy_handler(
     # 4. Header Sanitization
     camouflaged_headers = sanitize_headers(request.headers)
 
-    # 5. Nano-Second Streaming
+    # 5. Nano-Second Streaming with Safe Client Management
+    client = httpx.AsyncClient(proxies=proxies, timeout=60.0)
     try:
-        async with httpx.AsyncClient(proxies=proxies, timeout=60.0) as client:
-            upstream_request = client.build_request("GET", target_url, headers=camouflaged_headers)
-            upstream_response = await client.send(upstream_request, stream=True)
-            
-            exec_time = time.time() - start_time
-            background_tasks.add_task(emit_gateway_telemetry, "tunnel_established", client_slot_name, target_domain, exec_time)
-            
-            return StreamingResponse(
-                upstream_response.aiter_bytes(), 
-                status_code=upstream_response.status_code,
-                media_type=upstream_response.headers.get("content-type")
-            )
+        upstream_request = client.build_request("GET", target_url, headers=camouflaged_headers)
+        upstream_response = await client.send(upstream_request, stream=True)
+        
+        exec_time = time.time() - start_time
+        background_tasks.add_task(emit_gateway_telemetry, "tunnel_established", client_slot_name, target_domain, exec_time)
+        
+        return StreamingResponse(
+            proxy_stream_generator(client, upstream_response), 
+            status_code=upstream_response.status_code,
+            media_type=upstream_response.headers.get("content-type")
+        )
             
     except Exception as e:
+        await client.aclose()
         logging.error(f"Proxy routing failed via {decrypted_ip}. Target: {target_url}. Error: {str(e)}")
         background_tasks.add_task(emit_gateway_telemetry, "upstream_timeout", client_slot_name, target_domain, time.time() - start_time)
         raise HTTPException(status_code=502, detail="Bad Gateway: Upstream server dropped the connection.")
