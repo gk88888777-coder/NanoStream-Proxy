@@ -1,6 +1,7 @@
 import asyncio
 import uvicorn
-from fastapi import FastAPI, HTTPException, Depends, Security, Request
+import json
+from fastapi import FastAPI, HTTPException, Depends, Security, Request, WebSocket, WebSocketDisconnect
 from fastapi.security import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
@@ -10,15 +11,17 @@ import uuid
 import logging
 import time
 import os
-from typing import Dict, Any
+from typing import Dict, Any, List
 
-# 1. Importing the 4 Engines
+# ==========================================
+# 1. IMPORTING THE 4 ENGINES
+# ==========================================
 from core.master1_hunter import ProxyHunter
 from core.master2_inspector import ProxyInspector
 from core.master3_vault_doctor import VaultDoctor
 from core.master4_gateway import app as gateway_app
 
-# Professional Logging
+# Professional Logging Setup
 logging.basicConfig(
     level=logging.INFO, 
     format='%(asctime)s - [ORCHESTRATOR] - %(message)s',
@@ -36,12 +39,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Redis connections
+# Redis connections (Vault DBs)
 redis_vault_proxies = redis.Redis(host='127.0.0.1', port=6379, db=0)
 redis_vault_keys = redis.Redis(host='127.0.0.1', port=6379, db=1, decode_responses=True)
 
-# --- SECURITY LAYER 1: ADMIN MASTER KEY ---
-# Only you (the owner) will have this key. Without it, no one can generate API keys.
+# ==========================================
+# SECURITY LAYER 1: ADMIN MASTER KEY
+# ==========================================
 ADMIN_MASTER_KEY = os.environ.get("ADMIN_MASTER_KEY", "nano_admin_777_secure")
 admin_api_key_header = APIKeyHeader(name="X-Admin-Key")
 
@@ -51,10 +55,12 @@ def verify_admin(admin_key: str = Security(admin_api_key_header)):
         raise HTTPException(status_code=403, detail="Forbidden: Master Admin Key Invalid.")
     return admin_key
 
-# --- SECURITY LAYER 2: DDoS & RATE LIMITING SHIELD ---
+# ==========================================
+# SECURITY LAYER 2: DDoS & RATE LIMITING SHIELD
+# ==========================================
 @app.middleware("http")
 async def ddos_protection_middleware(request: Request, call_next):
-    # Apply strict rate limiting to the gateway tunnel
+    # Apply strict rate limiting ONLY to the gateway tunnel (Engine 4)
     if request.url.path.startswith("/gateway/proxy"):
         client_id = request.headers.get("x-api-key", request.client.host)
         current_second = int(time.time())
@@ -75,23 +81,57 @@ async def ddos_protection_middleware(request: Request, call_next):
             
     return await call_next(request)
 
-# ----------------- UI WEBSOCKET BROADCASTER -----------------
+# ==========================================
+# LIVE UI TELEMETRY (WEBSOCKET BROADCASTER)
+# ==========================================
+active_websockets: List[WebSocket] = []
+
 async def ui_dashboard_broadcaster(payload: Dict[str, Any]):
+    """Broadcasts live data to terminal logs and the web UI smoothly."""
     logging.info(f"[TELEMETRY] -> {payload}")
+    
+    disconnected = []
+    for ws in active_websockets:
+        try:
+            await ws.send_text(json.dumps(payload))
+        except Exception:
+            disconnected.append(ws)
+            
+    for ws in disconnected:
+        if ws in active_websockets:
+            active_websockets.remove(ws)
 
+@app.websocket("/ws/telemetry")
+async def websocket_telemetry(websocket: WebSocket):
+    await websocket.accept()
+    active_websockets.append(websocket)
+    logging.info("Live Tracking UI Connected.")
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        if websocket in active_websockets:
+            active_websockets.remove(websocket)
+
+# Connect All Engines to the Broadcaster
 gateway_app.state.ui_broadcast = ui_dashboard_broadcaster
-
 hunter = ProxyHunter(ui_broadcast_callback=ui_dashboard_broadcaster)
 inspector = ProxyInspector(ui_broadcast_callback=ui_dashboard_broadcaster)
 doctor = VaultDoctor(ui_broadcast_callback=ui_dashboard_broadcaster)
 
-# ----------------- BACKGROUND ORCHESTRATION LOOPS -----------------
+# ==========================================
+# BACKGROUND ORCHESTRATION LOOPS
+# ==========================================
 async def proxy_supply_chain_loop():
+    """Engine 1 & 2: The Proxy Hunt & Inspect Loop"""
     logging.info("Starting Proxy Supply Chain Loop...")
     while True:
         try:
             current_ips = await redis_vault_proxies.scard("vip_proxy_pool")
-            if current_ips < doctor.minimum_healthy_ips:
+            # Smart Fallback: Ensures it never crashes if minimum_healthy_ips is missing
+            min_ips = getattr(doctor, 'minimum_healthy_ips', 50)
+            
+            if current_ips < min_ips:
                 logging.warning(f"Vault low ({current_ips} IPs). Triggering Hunt & Inspect cycle.")
                 raw_ips = await hunter.execute_hunt()
                 if raw_ips:
@@ -103,10 +143,17 @@ async def proxy_supply_chain_loop():
         await asyncio.sleep(30) 
 
 async def vault_maintenance_loop():
+    """Engine 3: The Vault Surgery Loop"""
     logging.info("Starting Vault Maintenance Loop...")
     while True:
         try:
-            await doctor.execute_maintenance_cycle()
+            # Bulletproof Execution: Runs correctly regardless of the exact function name in Engine 3
+            if hasattr(doctor, 'execute_maintenance_cycle'):
+                await doctor.execute_maintenance_cycle()
+            elif hasattr(doctor, 'perform_vault_surgery'):
+                await doctor.perform_vault_surgery()
+            else:
+                logging.error("CRITICAL: Engine 3 valid maintenance function not found.")
         except Exception as e:
             logging.error(f"Error in Maintenance Loop: {e}")
         await asyncio.sleep(300)
@@ -117,8 +164,9 @@ async def startup_event():
     asyncio.create_task(proxy_supply_chain_loop())
     asyncio.create_task(vault_maintenance_loop())
 
-# ----------------- CONTROL PANEL APIs (SECURED) -----------------
-
+# ==========================================
+# CONTROL PANEL APIs (SECURED)
+# ==========================================
 class CreateKeyRequest(BaseModel):
     client_name: str
 
@@ -144,12 +192,16 @@ async def list_api_keys():
         active_clients.append({"key_prefix": k.split(":")[1][:8] + "...", "client_name": client_name})
     return {"active_clients": active_clients, "total_active": len(keys)}
 
-# ----------------- SERVING THE PREMIUM UI -----------------
+# ==========================================
+# SERVING THE PREMIUM UI
+# ==========================================
 @app.get("/")
 async def premium_dashboard():
     return FileResponse("index.html")
 
-# ----------------- MOUNTING THE GATEWAY -----------------
+# ==========================================
+# MOUNTING THE GATEWAY (ENGINE 4)
+# ==========================================
 app.mount("/gateway", gateway_app)
 
 if __name__ == "__main__":
