@@ -3,436 +3,293 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NanoStream-Proxy | 4-Engine Command Center</title>
+    <title>NanoStream 4X | Responsive App Control Center</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --bg-color: #03030a;
-            --glass-bg: rgba(15, 17, 26, 0.6);
-            --glass-border: rgba(255, 255, 255, 0.08);
-            --neon-cyan: #00f3ff;
-            --neon-purple: #9d00ff;
-            --neon-green: #00ff66;
-            --text-main: #e2e8f0;
-            --text-muted: #94a3b8;
-        }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-
-        body {
-            background-color: var(--bg-color);
-            background-image: 
-                radial-gradient(circle at 10% 20%, rgba(0, 243, 255, 0.06), transparent 30%),
-                radial-gradient(circle at 90% 80%, rgba(157, 0, 255, 0.06), transparent 30%);
-            color: var(--text-main);
-            height: 100vh;
-            display: flex;
-            overflow: hidden;
-        }
-
-        /* Sidebar */
-        .sidebar {
-            width: 260px;
-            background: var(--glass-bg);
-            backdrop-filter: blur(16px);
-            border-right: 1px solid var(--glass-border);
-            display: flex;
-            flex-direction: column;
-            padding: 20px 0;
-            z-index: 10;
-        }
-
-        .logo {
-            font-size: 1.3rem;
-            font-weight: bold;
-            text-align: center;
-            margin-bottom: 35px;
-            color: #fff;
-            text-shadow: 0 0 10px var(--neon-cyan);
-            letter-spacing: 1px;
-        }
-
-        .nav-btn {
-            background: transparent;
-            border: none;
-            color: var(--text-muted);
-            padding: 15px 25px;
-            text-align: left;
-            font-size: 0.95rem;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            border-left: 3px solid transparent;
-        }
-
-        .nav-btn:hover {
-            color: #fff;
-            background: rgba(255, 255, 255, 0.03);
-        }
-
-        .nav-btn.active {
-            color: var(--neon-cyan);
-            border-left: 3px solid var(--neon-cyan);
-            background: linear-gradient(90deg, rgba(0, 243, 255, 0.1) 0%, transparent 100%);
-            text-shadow: 0 0 8px rgba(0, 243, 255, 0.5);
-        }
-
-        /* Main Content */
-        .main-content {
-            flex: 1;
-            padding: 30px;
-            overflow-y: auto;
-        }
-
-        .tab-content {
-            display: none;
-            animation: fadeIn 0.3s ease-in-out;
-        }
-
-        .tab-content.active {
-            display: block;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(8px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        /* Glass Cards */
-        .glass-card {
-            background: var(--glass-bg);
-            backdrop-filter: blur(12px);
-            border: 1px solid var(--glass-border);
-            border-radius: 12px;
-            padding: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-        }
-
-        /* 4-Engine Status Grid */
-        .engine-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 15px;
-            margin-bottom: 25px;
-        }
-
-        .engine-box {
-            background: rgba(0, 0, 0, 0.4);
-            border: 1px solid var(--glass-border);
-            border-radius: 10px;
-            padding: 15px;
-            text-align: center;
-        }
-
-        .engine-box h4 {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 8px;
-        }
-
-        .engine-box .status-badge {
-            display: inline-block;
-            padding: 3px 10px;
-            border-radius: 12px;
-            font-size: 0.75rem;
-            font-weight: bold;
-            margin-top: 5px;
-        }
-        .status-running { background: rgba(0,255,100,0.15); color: var(--neon-green); border: 1px solid rgba(0,255,100,0.3); }
-
-        /* Terminals */
-        .terminal {
-            background: #020205;
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 8px;
-            padding: 15px;
-            height: 280px;
-            overflow-y: auto;
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 0.85rem;
-            color: #0f0;
-            box-shadow: inset 0 0 15px rgba(0, 255, 0, 0.04);
-        }
-
-        .terminal p { margin-bottom: 5px; border-bottom: 1px solid rgba(0,255,0,0.02); padding-bottom: 3px; }
-        .log-info { color: var(--neon-cyan); }
-        .log-success { color: var(--neon-green); }
-        .log-error { color: #ff3333; }
-
-        /* Inputs & Tables */
-        .input-group {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        }
-
-        input[type="text"], input[type="password"], select {
-            flex: 1;
-            min-width: 200px;
-            padding: 12px 15px;
-            background: rgba(0, 0, 0, 0.5);
-            border: 1px solid var(--glass-border);
-            border-radius: 6px;
-            color: #fff;
-            outline: none;
-        }
-        input:focus, select:focus { border-color: var(--neon-cyan); }
-
-        .btn {
-            padding: 12px 25px;
-            background: transparent;
-            color: var(--neon-cyan);
-            border: 1px solid var(--neon-cyan);
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            transition: 0.3s;
-        }
-        .btn:hover { background: var(--neon-cyan); color: #000; box-shadow: 0 0 15px var(--neon-cyan); }
-        .btn-danger { color: #ff3333; border-color: #ff3333; }
-        .btn-danger:hover { background: #ff3333; color: #fff; box-shadow: 0 0 15px #ff3333; }
-
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        th, td { text-align: left; padding: 12px 15px; border-bottom: 1px solid var(--glass-border); }
-        th { color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; }
-        td { font-family: monospace; font-size: 0.9rem; }
+        body { font-family: 'Inter', sans-serif; background-color: #07090e; color: #f3f4f6; }
+        .font-mono { font-family: 'Fira Code', monospace; }
+        .app-glass { background: rgba(13, 17, 23, 0.88); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.07); }
+        .custom-scroll::-webkit-scrollbar { width: 4px; height: 4px; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 4px; }
     </style>
 </head>
-<body>
+<body class="min-h-screen md:h-screen w-screen overflow-x-hidden md:overflow-hidden flex flex-col md:flex-row select-none">
 
-    <!-- Sidebar -->
-    <div class="sidebar">
-        <div class="logo">NanoStream Proxy</div>
-        <button class="nav-btn active" onclick="switchTab('dashboard', event)">⛑ Live Command Center</button>
-        <button class="nav-btn" onclick="switchTab('engines', event)">⚙️ 4-Engine Telemetry</button>
-        <button class="nav-btn" onclick="switchTab('control', event)">🔐 Secure Control Panel</button>
-    </div>
+    <!-- SIDEBAR NAVIGATION (Adaptive for Mobile & Desktop) -->
+    <aside class="w-full md:w-64 app-glass border-b md:border-b-0 md:border-r border-gray-800/80 flex flex-row md:flex-col justify-between p-4 md:p-5 z-20 shrink-0">
+        <div class="flex items-center justify-between md:block w-full">
+            <!-- App Brand -->
+            <div class="flex items-center space-x-3 md:mb-8 px-1">
+                <div class="h-2.5 w-2.5 rounded-full bg-cyan-400 animate-pulse shadow-[0_0_10px_#22d3ee]"></div>
+                <h1 class="text-sm md:text-base font-bold tracking-wider text-white">NANOSTREAM <span class="text-cyan-400">4X</span></h1>
+            </div>
 
-    <!-- Main Content Area -->
-    <div class="main-content">
+            <!-- Navigation Links (Horizontal scroll on mobile, vertical stack on desktop) -->
+            <nav class="flex md:flex-col space-x-2 md:space-x-0 md:space-y-1.5 font-medium text-xs md:text-sm">
+                <button onclick="switchView('overview')" id="nav-overview" class="flex items-center space-x-2 md:space-x-3 px-3 py-2 md:px-3.5 md:py-2.5 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+                    <span class="hidden sm:inline">Command Center</span>
+                </button>
+                <button onclick="switchView('clients')" id="nav-clients" class="flex items-center space-x-2 md:space-x-3 px-3 py-2 md:px-3.5 md:py-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
+                    <span class="hidden sm:inline">Client Vault</span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- System Status Footer (Hidden on small mobile screens to save space) -->
+        <div class="hidden md:block p-3 rounded-xl bg-black/40 border border-gray-800/60 font-mono text-xs space-y-1.5">
+            <div class="flex items-center justify-between text-gray-400">
+                <span>Core Engine:</span>
+                <span class="text-emerald-400 font-semibold">ONLINE</span>
+            </div>
+            <div class="flex items-center justify-between text-gray-400">
+                <span>Shield:</span>
+                <span class="text-cyan-400">ACTIVE</span>
+            </div>
+        </div>
+    </aside>
+
+    <!-- MAIN APP WORKSPACE -->
+    <main class="flex-1 flex flex-col h-auto md:h-full overflow-y-auto md:overflow-hidden bg-[#05070b]">
         
-        <!-- TAB 1: LIVE COMMAND CENTER -->
-        <div id="dashboard" class="tab-content active">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-                <h2 style="text-shadow: 0 0 10px var(--neon-cyan);">Live Architecture Overview</h2>
-                <div style="font-size: 0.85rem; color: var(--text-muted); background: rgba(0,0,0,0.4); padding: 6px 14px; border-radius: 20px; border: 1px solid var(--glass-border);">
-                    <span id="ws-indicator" style="height:8px; width:8px; display:inline-block; border-radius:50%; background:#00ff66; margin-right:6px; box-shadow:0 0 8px #00ff66;"></span> 
-                    <span id="ws-text">WebSocket Connected</span>
+        <!-- TOP APP BAR -->
+        <header class="h-auto md:h-16 app-glass border-b border-gray-800/80 px-4 md:px-8 py-3 md:py-0 flex flex-col sm:flex-row items-center justify-between gap-2 z-10 shrink-0">
+            <h2 id="view-title" class="text-xs md:text-sm font-semibold text-white tracking-wide uppercase">Command Center & Telemetry</h2>
+            <div class="flex items-center space-x-3 font-mono text-xs">
+                <span class="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center space-x-2">
+                    <span class="h-2 w-2 rounded-full bg-emerald-400 animate-ping"></span>
+                    <span>Live Sync</span>
+                </span>
+            </div>
+        </header>
+
+        <!-- DYNAMIC CONTENT AREA -->
+        <div class="flex-1 p-4 md:p-6 overflow-y-auto md:overflow-hidden flex flex-col gap-4 md:gap-6">
+            
+            <!-- VIEW 1: COMMAND CENTER -->
+            <div id="view-overview" class="flex-1 flex flex-col gap-4 md:gap-6 h-full overflow-hidden">
+                
+                <!-- TOP METRICS ROW (Responsive Grid: 2 cols on mobile, 4 on desktop) -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 shrink-0">
+                    <div class="app-glass rounded-2xl p-3.5 md:p-4">
+                        <p class="text-[10px] md:text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Proxy IPs</p>
+                        <h3 id="stat-proxies" class="text-xl md:text-2xl font-bold font-mono text-cyan-400 mt-1">--</h3>
+                    </div>
+                    <div class="app-glass rounded-2xl p-3.5 md:p-4">
+                        <p class="text-[10px] md:text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Active Clients</p>
+                        <h3 id="stat-clients" class="text-xl md:text-2xl font-bold font-mono text-emerald-400 mt-1">--</h3>
+                    </div>
+                    <div class="app-glass rounded-2xl p-3.5 md:p-4">
+                        <p class="text-[10px] md:text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Security Shield</p>
+                        <h3 class="text-xl md:text-2xl font-bold font-mono text-purple-400 mt-1">SECURE</h3>
+                    </div>
+                    <div class="app-glass rounded-2xl p-3.5 md:p-4">
+                        <p class="text-[10px] md:text-[11px] font-semibold text-gray-400 uppercase tracking-wider">Gateway Status</p>
+                        <h3 class="text-xl md:text-2xl font-bold font-mono text-amber-400 mt-1">STABLE</h3>
+                    </div>
+                </div>
+
+                <!-- SPLIT PANE: QUICK CONTROLS & LIVE TERMINAL (Stacked on mobile, side-by-side on desktop) -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 md:gap-6 flex-1 overflow-hidden">
+                    
+                    <!-- Left: Quick API Key Generator Widget -->
+                    <div class="lg:col-span-4 app-glass rounded-2xl p-4 md:p-5 flex flex-col justify-between shrink-0">
+                        <div>
+                            <h3 class="text-xs font-semibold text-gray-300 uppercase tracking-wider mb-3 flex items-center space-x-2">
+                                <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path></svg>
+                                <span>Quick Key Generator</span>
+                            </h3>
+                            <div class="space-y-2.5">
+                                <input type="password" id="quickAdminKey" placeholder="Master Admin Key" class="w-full bg-black/50 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-500 font-mono">
+                                <input type="text" id="quickClientName" placeholder="Client Name" class="w-full bg-black/50 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-500 font-mono">
+                                <select id="quickKeyType" class="w-full bg-black/50 border border-gray-800 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-cyan-500 font-mono">
+                                    <option value="permanent">Permanent Access</option>
+                                    <option value="86400">1 Day Pass</option>
+                                    <option value="2592000">30 Days Pass</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="mt-4 lg:mt-0">
+                            <button onclick="generateQuickKey()" class="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black font-semibold text-xs transition uppercase tracking-wider shadow-[0_0_15px_rgba(34,211,238,0.3)]">
+                                Generate Key
+                            </button>
+                            <div id="quick-result" class="hidden mt-2 p-2 rounded-xl bg-black/70 border border-cyan-500/30 text-[11px] font-mono text-cyan-300 break-all"></div>
+                        </div>
+                    </div>
+
+                    <!-- Right: Live Telemetry Terminal -->
+                    <div class="lg:col-span-8 app-glass rounded-2xl p-4 md:p-5 flex flex-col h-64 lg:h-full overflow-hidden">
+                        <div class="flex items-center justify-between mb-3 shrink-0">
+                            <h3 class="text-xs font-semibold text-gray-300 uppercase tracking-wider">Live Traffic Feed</h3>
+                            <button onclick="clearTerminal()" class="text-[10px] px-2 py-1 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 font-mono transition">Clear</button>
+                        </div>
+                        <div id="terminal-box" class="flex-1 bg-black/80 rounded-xl p-3 font-mono text-[11px] text-gray-300 overflow-y-auto custom-scroll space-y-1.5 border border-gray-800/60">
+                            <div class="text-gray-500">[SYSTEM] Initializing secure telemetry feed...</div>
+                        </div>
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- VIEW 2: CLIENT VAULT MANAGEMENT -->
+            <div id="view-clients" class="hidden flex-1 flex flex-col gap-4 h-full overflow-hidden">
+                <div class="app-glass rounded-2xl p-4 md:p-5 flex-1 flex flex-col overflow-hidden">
+                    <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4 shrink-0">
+                        <h3 class="text-xs font-semibold text-gray-300 uppercase tracking-wider">Active Client Vault Database</h3>
+                        <div class="flex items-center space-x-2 w-full sm:w-auto">
+                            <input type="password" id="vaultAdminKey" placeholder="Admin Key" oninput="loadClientVault()" class="bg-black/50 border border-gray-800 rounded-xl px-3 py-1.5 text-xs text-white outline-none focus:border-cyan-500 font-mono flex-1 sm:w-48">
+                            <button onclick="loadClientVault()" class="px-3 py-1.5 rounded-xl bg-gray-800 hover:bg-gray-700 text-xs text-gray-200 font-mono transition shrink-0">Load</button>
+                        </div>
+                    </div>
+                    <div class="flex-1 overflow-y-auto custom-scroll border border-gray-800/60 rounded-xl bg-black/40">
+                        <table class="w-full text-left border-collapse min-w-[500px]">
+                            <thead>
+                                <tr class="border-b border-gray-800 text-[11px] text-gray-400 uppercase font-mono bg-black/30 sticky top-0">
+                                    <th class="p-3">Client Name</th>
+                                    <th class="p-3">Key Prefix</th>
+                                    <th class="p-3">Type</th>
+                                    <th class="p-3">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="vault-table-body" class="font-mono text-xs">
+                                <tr>
+                                    <td colspan="4" class="p-4 text-center text-gray-500">Enter Admin Key above to view clients.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
-            <!-- ALL 4 ENGINES LIVE STATUS CARDS -->
-            <div class="engine-grid">
-                <div class="engine-box">
-                    <h4>Engine 1: Hunter</h4>
-                    <p style="font-size: 1.1rem; font-weight: bold; color: var(--neon-cyan); margin-top: 5px;" id="eng1-stat">Hunting...</p>
-                    <span class="status-badge status-running">Active Mode</span>
-                </div>
-                <div class="engine-box">
-                    <h4>Engine 2: Inspector</h4>
-                    <p style="font-size: 1.1rem; font-weight: bold; color: var(--neon-purple); margin-top: 5px;" id="eng2-stat">Filtering IPs</p>
-                    <span class="status-badge status-running">Anonymity ON</span>
-                </div>
-                <div class="engine-box">
-                    <h4>Engine 3: Doctor</h4>
-                    <p style="font-size: 1.1rem; font-weight: bold; color: #ffcc00; margin-top: 5px;" id="eng3-stat">Vault Sanitizing</p>
-                    <span class="status-badge status-running">RAM Sync</span>
-                </div>
-                <div class="engine-box">
-                    <h4>Engine 4: Gateway</h4>
-                    <p style="font-size: 1.1rem; font-weight: bold; color: var(--neon-green); margin-top: 5px;" id="eng4-stat">Tunnel Ready</p>
-                    <span class="status-badge status-running">DDoS Shield</span>
-                </div>
-            </div>
-            
-            <div class="glass-card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <h3 style="color: var(--text-muted); font-size: 0.95rem;">Live Multi-Engine Traffic Stream</h3>
-                    <button class="btn" style="padding: 5px 12px; font-size: 0.7rem;" onclick="clearTerminal()">Clear Feed</button>
-                </div>
-                <div class="terminal" id="traffic-monitor">
-                    <p class="log-info">[SYSTEM] Listening for live telemetry across all 4 engines...</p>
-                </div>
-            </div>
         </div>
 
-        <!-- TAB 2: ENGINE ROOM TELEMETRY -->
-        <div id="engines" class="tab-content">
-            <h2 style="margin-bottom: 20px; text-shadow: 0 0 10px var(--neon-purple);">Deep Engine Room Telemetry</h2>
-            
-            <div class="glass-card">
-                <h3 style="margin-bottom: 10px; color: var(--neon-cyan);">Master 1 & 2 (Supply Chain & Inspection)</h3>
-                <div class="terminal" style="height: 130px; margin-bottom: 15px;">
-                    <p class="log-info">[HUNTER] Scanning proxy feeds and pushing raw IPs into pipeline...</p>
-                    <p>[INSPECTOR] Validating latency, anonymity levels, and SSRF compliance in real-time.</p>
-                </div>
+    </main>
 
-                <h3 style="margin-bottom: 10px; color: var(--neon-purple);">Master 3 & 4 (Vault Doctor & High-Speed Gateway)</h3>
-                <div class="terminal" style="height: 130px;">
-                    <p class="log-info">[DOCTOR] Rotating encrypted tokens in Redis DB 0 (VIP Proxy Pool)...</p>
-                    <p class="log-success">[GATEWAY] Handling incoming client tunnels with 15 req/sec rate-limit protection.</p>
-                </div>
-            </div>
-        </div>
-
-        <!-- TAB 3: SECURE CONTROL PANEL (LOCALHOST ONLY) -->
-        <div id="control" class="tab-content">
-            <h2 style="margin-bottom: 20px; text-shadow: 0 0 10px #ff3333);">Secure Admin Control Panel (Strictly Local)</h2>
-            
-            <div class="glass-card">
-                <h3 style="margin-bottom: 15px;">Generate Client API Key (Permanent or Timed Subscription)</h3>
-                <div class="input-group">
-                    <input type="password" id="adminKey" placeholder="Enter Master Admin Key (Required)" oninput="loadActiveKeys()">
-                    <input type="text" id="clientName" placeholder="Enter Client / Vercel App Name">
-                    <select id="keyType">
-                        <option value="permanent">Permanent (Unlimited)</option>
-                        <option value="86400">Timed: 1 Day</option>
-                        <option value="2592000">Timed: 30 Days</option>
-                    </select>
-                    <button class="btn" onclick="generateKey()">Generate Key</button>
-                </div>
-                <p id="key-result" style="color: var(--neon-cyan); margin-top: 10px; display: none;"></p>
-            </div>
-
-            <div class="glass-card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3>Active Client Vault Database</h3>
-                    <button class="btn" style="padding: 5px 12px; font-size: 0.7rem;" onclick="loadActiveKeys()">Refresh List</button>
-                </div>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Client Name</th>
-                            <th>Key Prefix</th>
-                            <th>Subscription Type</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="client-list">
-                        <tr>
-                            <td colspan="4" style="text-align: center; color: var(--text-muted);">Enter Master Admin Key above to authenticate and load clients.</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-    </div>
-
-    <!-- Script Logic -->
+    <!-- CLIENT APP LOGIC -->
     <script>
         const API_BASE = window.location.origin;
 
-        function switchTab(tabId, event) {
-            document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.remove('active'));
-            document.getElementById(tabId).classList.add('active');
-            if(event && event.currentTarget) event.currentTarget.classList.add('active');
-            if(tabId === 'control') loadActiveKeys();
+        function switchView(viewName) {
+            document.getElementById('view-overview').classList.add('hidden');
+            document.getElementById('view-clients').classList.add('hidden');
+            document.getElementById('nav-overview').className = "flex items-center space-x-2 md:space-x-3 px-3 py-2 md:px-3.5 md:py-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition";
+            document.getElementById('nav-clients').className = "flex items-center space-x-2 md:space-x-3 px-3 py-2 md:px-3.5 md:py-2.5 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition";
+
+            if (viewName === 'overview') {
+                document.getElementById('view-overview').classList.remove('hidden');
+                document.getElementById('nav-overview').className = "flex items-center space-x-2 md:space-x-3 px-3 py-2 md:px-3.5 md:py-2.5 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 transition";
+                document.getElementById('view-title').innerText = "Command Center & Telemetry";
+            } else {
+                document.getElementById('view-clients').classList.remove('hidden');
+                document.getElementById('nav-clients').className = "flex items-center space-x-2 md:space-x-3 px-3 py-2 md:px-3.5 md:py-2.5 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 transition";
+                document.getElementById('view-title').innerText = "Client Vault Management";
+                loadClientVault();
+            }
         }
 
-        function connectWebSocket() {
-            const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-            const ws = new WebSocket(wsProtocol + window.location.host + '/ws/telemetry');
-
-            ws.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    appendTerminalLog(data);
-                } catch (e) {
-                    console.error("Telemetry error", e);
+        async function fetchMetrics() {
+            try {
+                const res = await fetch(`${API_BASE}/health`);
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('stat-proxies').innerText = data.available_proxy_ips || 0;
+                    document.getElementById('stat-clients').innerText = data.active_clients || 0;
                 }
-            };
-            ws.onclose = () => setTimeout(connectWebSocket, 3000);
+            } catch (e) {}
         }
 
-        function appendTerminalLog(data) {
-            const terminal = document.getElementById('traffic-monitor');
-            const timeStr = new Date().toLocaleTimeString();
-            let statusClass = "log-info";
-            if (data.status === "tunnel_established") statusClass = "log-success";
-            if (data.status.includes("error") || data.status.includes("fail") || data.status.includes("blocked")) statusClass = "log-error";
+        function appendLog(text, type = 'info') {
+            const terminal = document.getElementById('terminal-box');
+            if(!terminal) return;
+            const time = new Date().toLocaleTimeString();
+            let color = 'text-cyan-400';
+            if (type === 'success') color = 'text-emerald-400';
+            if (type === 'error') color = 'text-rose-400';
 
-            const p = document.createElement('p');
-            p.innerHTML = `<span style="color:var(--text-muted)">[${timeStr}]</span> Engine: <b style="color:#fff">${data.engine || 'system'}</b> | Status: <span class="${statusClass}">${data.status}</span> | Client: <span style="color:var(--neon-cyan)">${data.client_slot || 'N/A'}</span> | Target: <span style="color:var(--text-muted)">${data.target_domain || 'N/A'}</span>`;
-            terminal.appendChild(p);
+            const div = document.createElement('div');
+            div.className = `flex items-center space-x-2 ${color}`;
+            div.innerHTML = `<span class="text-gray-600">[${time}]</span> <span>${text}</span>`;
+            terminal.appendChild(div);
             terminal.scrollTop = terminal.scrollHeight;
         }
 
         function clearTerminal() {
-            document.getElementById('traffic-monitor').innerHTML = '<p class="log-info">[SYSTEM] Terminal feed cleared.</p>';
+            document.getElementById('terminal-box').innerHTML = '<div class="text-gray-500">[System] Terminal feed cleared.</div>';
         }
 
-        async function generateKey() {
-            const adminKey = document.getElementById('adminKey').value;
-            const clientName = document.getElementById('clientName').value;
-            const keyTypeVal = document.getElementById('keyType').value;
-            const resultBox = document.getElementById('key-result');
+        async function generateQuickKey() {
+            const adminKey = document.getElementById('quickAdminKey').value;
+            const clientName = document.getElementById('quickClientName').value;
+            const typeVal = document.getElementById('quickKeyType').value;
+            const resBox = document.getElementById('quick-result');
 
-            if(!adminKey || !clientName) {
-                resultBox.style.color = '#ff3333';
-                resultBox.innerText = "Error: Admin Key and Client Name required.";
-                resultBox.style.display = 'block';
+            if (!adminKey || !clientName) {
+                resBox.className = "mt-2 p-2 rounded-xl bg-black/70 border border-rose-500/30 text-[11px] font-mono text-rose-400 block";
+                resBox.innerText = "Error: Admin Key & Name required.";
                 return;
             }
 
-            let expirySeconds = keyTypeVal === 'permanent' ? null : parseInt(keyTypeVal);
+            let expiry = typeVal === 'permanent' ? null : parseInt(typeVal);
 
             try {
-                const response = await fetch(`${API_BASE}/admin/keys/generate`, {
+                const res = await fetch(`${API_BASE}/admin/keys/generate`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
-                    body: JSON.stringify({ client_name: clientName, expiry_seconds: expirySeconds })
+                    body: JSON.stringify({ client_name: clientName, expiry_seconds: expiry })
                 });
-                const data = await response.json();
-                if (response.ok) {
-                    resultBox.innerHTML = `Success! Generated for <b>${data.client_name}</b>:<br><span style="color:#fff; background:#111; padding:4px 8px; font-family:monospace;">${data.api_key}</span>`;
-                    document.getElementById('clientName').value = '';
-                    loadActiveKeys();
+                const data = await res.json();
+                if (res.ok) {
+                    resBox.className = "mt-2 p-2 rounded-xl bg-black/70 border border-emerald-500/30 text-[11px] font-mono text-emerald-400 block";
+                    resBox.innerHTML = `Key: <code class="text-white">${data.api_key}</code>`;
+                    document.getElementById('quickClientName').value = '';
+                    appendLog(`API Key generated for: ${data.client_name}`, 'success');
                 } else {
-                    resultBox.style.color = '#ff3333';
-                    resultBox.innerText = `Access Denied (Localhost Shield Active): ${data.detail || 'Unauthorized'}`;
+                    resBox.className = "mt-2 p-2 rounded-xl bg-black/70 border border-rose-500/30 text-[11px] font-mono text-rose-400 block";
+                    resBox.innerText = `Denied: ${data.detail || 'Unauthorized'}`;
                 }
-            } catch (error) {
-                resultBox.style.color = '#ff3333';
-                resultBox.innerText = "Connection Error to Server Vault.";
+            } catch (e) {
+                resBox.className = "mt-2 p-2 rounded-xl bg-black/70 border border-rose-500/30 text-[11px] font-mono text-rose-400 block";
+                resBox.innerText = "Connection Failed.";
             }
         }
 
-        async function loadActiveKeys() {
-            const adminKey = document.getElementById('adminKey').value;
-            if(!adminKey) return;
+        async function loadClientVault() {
+            const adminKey = document.getElementById('vaultAdminKey').value || document.getElementById('quickAdminKey').value;
+            if (!adminKey) return;
 
             try {
-                const response = await fetch(`${API_BASE}/admin/keys/list`, {
+                const res = await fetch(`${API_BASE}/admin/keys/list`, {
                     method: 'GET',
                     headers: { 'X-Admin-Key': adminKey }
                 });
-                const data = await response.json();
-                if (response.ok) {
-                    const table = document.getElementById('client-list');
-                    table.innerHTML = '';
-                    if(data.active_clients.length === 0) {
-                        table.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No active clients found.</td></tr>`;
+                const data = await res.json();
+                if (res.ok) {
+                    const tbody = document.getElementById('vault-table-body');
+                    tbody.innerHTML = '';
+                    if (!data.active_clients || data.active_clients.length === 0) {
+                        tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-gray-500">No active clients found.</td></tr>`;
                         return;
                     }
-                    data.active_clients.forEach(client => {
-                        table.innerHTML += `<tr><td>${client.client_name}</td><td>${client.key_prefix}</td><td style="color:var(--neon-cyan);">${client.type}</td><td><span style="color:var(--text-muted)">Secured</span></td></tr>`;
+                    data.active_clients.forEach(c => {
+                        tbody.innerHTML += `
+                            <tr class="border-b border-gray-800/60 hover:bg-white/[0.02]">
+                                <td class="p-3 text-white font-semibold">${c.client_name}</td>
+                                <td class="p-3 text-cyan-400">${c.key_prefix}</td>
+                                <td class="p-3 text-gray-300">${c.type}</td>
+                                <td class="p-3 text-emerald-400">Secure</td>
+                            </tr>
+                        `;
                     });
                 }
             } catch (e) {}
         }
 
-        window.onload = connectWebSocket;
+        setInterval(fetchMetrics, 5000);
+        fetchMetrics();
+        appendLog("NanoStream Responsive Workspace active.", "success");
     </script>
 </body>
 </html>
