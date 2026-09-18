@@ -3,7 +3,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Depends, Security, Request
 from fastapi.security import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 from pydantic import BaseModel
 import redis.asyncio as redis
 import uuid
@@ -143,6 +143,11 @@ async def list_api_keys():
         client_name = await redis_vault_keys.get(k)
         active_clients.append({"key_prefix": k.split(":")[1][:8] + "...", "client_name": client_name})
     return {"active_clients": active_clients, "total_active": len(keys)}
+
+# ----------------- SERVING THE PREMIUM UI -----------------
+@app.get("/")
+async def premium_dashboard():
+    return FileResponse("index.html")
 
 # ----------------- MOUNTING THE GATEWAY -----------------
 app.mount("/gateway", gateway_app)
