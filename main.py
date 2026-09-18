@@ -11,25 +11,24 @@ import uuid
 import logging
 import time
 import os
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 # ==========================================
-# 1. IMPORTING THE 4 ENGINES
+# 1. IMPORTING THE STABLE 4-ENGINE ARCHITECTURE
 # ==========================================
 from core.master1_hunter import ProxyHunter
 from core.master2_inspector import ProxyInspector
 from core.master3_vault_doctor import VaultDoctor
 from core.master4_gateway import app as gateway_app
 
-# Professional Logging Setup
+# Enterprise Logging Setup
 logging.basicConfig(
     level=logging.INFO, 
-    format='%(asctime)s - [ORCHESTRATOR] - %(message)s',
+    format='%(asctime)s - [NANOSTREAM-MASTER-CORE] - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
-# 2. Initialize the Main Orchestrator App
-app = FastAPI(title="NanoStream-Proxy Control Room", version="2.0.0")
+app = FastAPI(title="NanoStream-Proxy Control Room", version="5.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -39,44 +38,63 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Redis connections (Vault DBs)
-redis_vault_proxies = redis.Redis(host='127.0.0.1', port=6379, db=0)
-redis_vault_keys = redis.Redis(host='127.0.0.1', port=6379, db=1, decode_responses=True)
+# ==========================================
+# SPEED LAYER: HIGH-PERFORMANCE REDIS POOL
+# ==========================================
+redis_pool_proxies = redis.ConnectionPool(host='127.0.0.1', port=6379, db=0, max_connections=100)
+redis_pool_keys = redis.ConnectionPool(host='127.0.0.1', port=6379, db=1, decode_responses=True, max_connections=100)
+
+redis_vault_proxies = redis.Redis(connection_pool=redis_pool_proxies)
+redis_vault_keys = redis.Redis(connection_pool=redis_pool_keys)
 
 # ==========================================
-# SECURITY LAYER 1: ADMIN MASTER KEY
+# SECURITY LAYER 1: STRICT LOCAL ADMIN SHIELD
 # ==========================================
 ADMIN_MASTER_KEY = os.environ.get("ADMIN_MASTER_KEY", "nano_admin_777_secure")
 admin_api_key_header = APIKeyHeader(name="X-Admin-Key")
 
-def verify_admin(admin_key: str = Security(admin_api_key_header)):
+async def verify_local_admin_shield(request: Request, admin_key: str = Security(admin_api_key_header)):
+    """Ensures the admin panel can ONLY be accessed locally from the server (127.0.0.1)."""
+    client_ip = request.client.host if request.client else "unknown"
+    if client_ip not in ["127.0.0.1", "::1", "localhost"]:
+        logging.critical(f"SECURITY BREACH: External IP {client_ip} attempted unauthorized access to Admin Panel!")
+        raise HTTPException(status_code=403, detail="Forbidden: Admin control room is strictly locked to local server vault.")
+    
     if admin_key != ADMIN_MASTER_KEY:
-        logging.critical(f"Hacking Attempt: Invalid Admin Key used -> {admin_key}")
+        logging.critical(f"SECURITY ALERT: Invalid Master Admin Key used from IP {client_ip}")
         raise HTTPException(status_code=403, detail="Forbidden: Master Admin Key Invalid.")
     return admin_key
 
 # ==========================================
-# SECURITY LAYER 2: DDoS & RATE LIMITING SHIELD
+# SECURITY LAYER 2: 15-REQ/SEC RATE LIMIT & AUTO-BLOCK
 # ==========================================
 @app.middleware("http")
-async def ddos_protection_middleware(request: Request, call_next):
-    # Apply strict rate limiting ONLY to the gateway tunnel (Engine 4)
-    if request.url.path.startswith("/gateway/proxy"):
-        client_id = request.headers.get("x-api-key", request.client.host)
-        current_second = int(time.time())
-        redis_rate_key = f"rate_limit:{client_id}:{current_second}"
+async def lightning_rate_limit_and_shield_middleware(request: Request, call_next):
+    if request.url.path.startswith("/gateway"):
+        client_id = request.headers.get("x-api-key") or request.headers.get("X-API-Key") or (request.client.host if request.client else "unknown")
         
-        # Count requests per second
+        # O(1) Fast check if client/IP is already auto-blocked
+        if await redis_vault_keys.exists(f"auto_blocked:{client_id}"):
+            return JSONResponse(
+                status_code=403, 
+                content={"detail": "Forbidden: This Key/IP has been auto-blocked due to rate-limit violation."}
+            )
+            
+        current_second = int(time.time())
+        redis_rate_key = f"rl:{client_id}:{current_second}"
+        
+        # Nanosecond atomic increment
         requests_this_second = await redis_vault_keys.incr(redis_rate_key)
         if requests_this_second == 1:
-            await redis_vault_keys.expire(redis_rate_key, 2) # Clean up memory instantly
+            await redis_vault_keys.expire(redis_rate_key, 2)
             
-        # Limit: 50 requests per second per client
-        if requests_this_second > 50:
-            logging.warning(f"DDoS Shield Active: Blocked {client_id} for exceeding 50 req/sec.")
+        # Strict Rule: Exactly 15 requests/sec limit. Exceeding triggers 10-minute auto-block.
+        if requests_this_second > 15:
+            logging.warning(f"RATE LIMIT BREACH: Auto-blocking client/IP {client_id} for exceeding 15 req/sec.")
+            await redis_vault_keys.setex(f"auto_blocked:{client_id}", 600, "rate_limit_exceeded")
             return JSONResponse(
                 status_code=429, 
-                content={"detail": "Too Many Requests: DDoS protection triggered. Slow down."}
+                content={"detail": "Too Many Requests: Limit is 15 req/sec. Key/IP has been auto-blocked for 10 minutes."}
             )
             
     return await call_next(request)
@@ -87,13 +105,13 @@ async def ddos_protection_middleware(request: Request, call_next):
 active_websockets: List[WebSocket] = []
 
 async def ui_dashboard_broadcaster(payload: Dict[str, Any]):
-    """Broadcasts live data to terminal logs and the web UI smoothly."""
-    logging.info(f"[TELEMETRY] -> {payload}")
-    
+    if not active_websockets:
+        return
+    data = json.dumps(payload)
     disconnected = []
     for ws in active_websockets:
         try:
-            await ws.send_text(json.dumps(payload))
+            await ws.send_text(data)
         except Exception:
             disconnected.append(ws)
             
@@ -105,7 +123,6 @@ async def ui_dashboard_broadcaster(payload: Dict[str, Any]):
 async def websocket_telemetry(websocket: WebSocket):
     await websocket.accept()
     active_websockets.append(websocket)
-    logging.info("Live Tracking UI Connected.")
     try:
         while True:
             await websocket.receive_text()
@@ -113,96 +130,105 @@ async def websocket_telemetry(websocket: WebSocket):
         if websocket in active_websockets:
             active_websockets.remove(websocket)
 
-# Connect All Engines to the Broadcaster
+# Connect Engines to Broadcaster
 gateway_app.state.ui_broadcast = ui_dashboard_broadcaster
 hunter = ProxyHunter(ui_broadcast_callback=ui_dashboard_broadcaster)
 inspector = ProxyInspector(ui_broadcast_callback=ui_dashboard_broadcaster)
 doctor = VaultDoctor(ui_broadcast_callback=ui_dashboard_broadcaster)
 
 # ==========================================
-# BACKGROUND ORCHESTRATION LOOPS
+# BACKGROUND ORCHESTRATION LOOPS (ENGINES 1-3)
 # ==========================================
 async def proxy_supply_chain_loop():
-    """Engine 1 & 2: The Proxy Hunt & Inspect Loop"""
-    logging.info("Starting Proxy Supply Chain Loop...")
     while True:
         try:
             current_ips = await redis_vault_proxies.scard("vip_proxy_pool")
-            # Smart Fallback: Ensures it never crashes if minimum_healthy_ips is missing
             min_ips = getattr(doctor, 'minimum_healthy_ips', 50)
-            
             if current_ips < min_ips:
-                logging.warning(f"Vault low ({current_ips} IPs). Triggering Hunt & Inspect cycle.")
                 raw_ips = await hunter.execute_hunt()
                 if raw_ips:
                     await inspector.execute_inspection(raw_ips)
-            else:
-                logging.debug(f"Vault healthy ({current_ips} IPs). Sleeping...")
         except Exception as e:
             logging.error(f"Error in Supply Chain Loop: {e}")
         await asyncio.sleep(30) 
 
 async def vault_maintenance_loop():
-    """Engine 3: The Vault Surgery Loop"""
-    logging.info("Starting Vault Maintenance Loop...")
     while True:
         try:
-            # Bulletproof Execution: Runs correctly regardless of the exact function name in Engine 3
             if hasattr(doctor, 'execute_maintenance_cycle'):
                 await doctor.execute_maintenance_cycle()
             elif hasattr(doctor, 'perform_vault_surgery'):
                 await doctor.perform_vault_surgery()
-            else:
-                logging.error("CRITICAL: Engine 3 valid maintenance function not found.")
         except Exception as e:
             logging.error(f"Error in Maintenance Loop: {e}")
         await asyncio.sleep(300)
 
 @app.on_event("startup")
 async def startup_event():
-    logging.info("System Booting: Igniting 4-Engine Architecture with DDoS Shield...")
+    logging.info("NanoStream System Booting: 4-Engine Architecture online with Zero-Trust Security & Pooling...")
     asyncio.create_task(proxy_supply_chain_loop())
     asyncio.create_task(vault_maintenance_loop())
 
 # ==========================================
-# CONTROL PANEL APIs (SECURED)
+# CONTROL PANEL APIs (DUAL-MODE KEYS)
 # ==========================================
 class CreateKeyRequest(BaseModel):
     client_name: str
+    expiry_seconds: Optional[int] = None  # None = Permanent, Int = Timed Subscription
 
-@app.post("/admin/keys/generate", dependencies=[Depends(verify_admin)])
+@app.post("/admin/keys/generate", dependencies=[Depends(verify_local_admin_shield)])
 async def generate_api_key(request: CreateKeyRequest):
     new_key = f"ns_{uuid.uuid4().hex}"
-    await redis_vault_keys.set(f"api_key:{new_key}", request.client_name)
-    return {"message": "Key generated successfully", "api_key": new_key, "client_name": request.client_name}
+    redis_key_name = f"api_key:{new_key}"
+    
+    if request.expiry_seconds and request.expiry_seconds > 0:
+        await redis_vault_keys.setex(redis_key_name, request.expiry_seconds, request.client_name)
+        key_type = "subscription_timed"
+    else:
+        await redis_vault_keys.set(redis_key_name, request.client_name)
+        key_type = "permanent_unlimited"
+        
+    logging.info(f"ADMIN ACTION -> Generated {key_type} key for client: {request.client_name}")
+    return {
+        "message": "Key generated successfully under secure local admin lock",
+        "api_key": new_key,
+        "client_name": request.client_name,
+        "type": key_type
+    }
 
-@app.delete("/admin/keys/revoke/{api_key}", dependencies=[Depends(verify_admin)])
+@app.delete("/admin/keys/revoke/{api_key}", dependencies=[Depends(verify_local_admin_shield)])
 async def revoke_api_key(api_key: str):
     result = await redis_vault_keys.delete(f"api_key:{api_key}")
     if result == 0:
-        raise HTTPException(status_code=404, detail="API Key not found.")
+        raise HTTPException(status_code=404, detail="API Key not found in vault.")
+    logging.info(f"ADMIN ACTION -> Revoked API key successfully.")
     return {"message": "Key revoked successfully"}
 
-@app.get("/admin/keys/list", dependencies=[Depends(verify_admin)])
+@app.get("/admin/keys/list", dependencies=[Depends(verify_local_admin_shield)])
 async def list_api_keys():
     keys = await redis_vault_keys.keys("api_key:*")
     active_clients = []
     for k in keys:
         client_name = await redis_vault_keys.get(k)
-        active_clients.append({"key_prefix": k.split(":")[1][:8] + "...", "client_name": client_name})
+        ttl = await redis_vault_keys.ttl(k)
+        active_clients.append({
+            "key_prefix": k.split(":")[1][:8] + "...", 
+            "client_name": client_name,
+            "type": "permanent" if ttl == -1 else f"expires_in_{ttl}_secs"
+        })
     return {"active_clients": active_clients, "total_active": len(keys)}
 
 # ==========================================
-# SERVING THE PREMIUM UI
+# SERVING THE DASHBOARD UI
 # ==========================================
 @app.get("/")
 async def premium_dashboard():
     return FileResponse("index.html")
 
 # ==========================================
-# MOUNTING THE GATEWAY (ENGINE 4)
+# MOUNTING ENGINE 4 (GATEWAY)
 # ==========================================
 app.mount("/gateway", gateway_app)
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
