@@ -48,15 +48,22 @@ class ProxyInspector:
         """
         Performs a rigorous acid test on a single raw IP address.
         Verifies if the proxy can successfully route traffic and mask the origin.
+        Configured with a 15.0-second timeout to allow thorough inspection.
         """
         proxy_url = f"http://{raw_ip}"
         
+        # Universal proxy syntax compatible with stable and legacy httpx versions
+        proxies_config = {
+            "http://": proxy_url,
+            "https://": proxy_url
+        }
+        
         try:
-            # Modern HTTPX syntax with verify=False to prevent false negatives on free proxies
+            # Extended 15.0 seconds timeout ensures deep network verification
             async with httpx.AsyncClient(
-                proxy=proxy_url, 
-                timeout=5.0, 
-                verify=False, 
+                proxies=proxies_config, 
+                timeout=15.0, 
+                verify=False,
                 follow_redirects=True
             ) as client:
                 
@@ -71,8 +78,11 @@ class ProxyInspector:
                     if returned_ip and (ip_only in returned_ip or len(returned_ip) > 6):
                         return raw_ip
                         
-        except Exception:
-            # Silently ignore connection timeouts, SSL errors, or dead proxies
+        except Exception as e:
+            # Capture and log critical syntax errors, silently ignore standard network timeouts
+            error_msg = str(e).lower()
+            if "unexpected keyword" in error_msg or "proxy" in error_msg:
+                logging.error(f"HTTPX Configuration Error on {raw_ip}: {repr(e)}")
             pass
             
         return None
@@ -95,7 +105,7 @@ class ProxyInspector:
             logging.warning("No raw IPs provided for inspection. Aborting cycle.")
             return
 
-        logging.info(f"Initiating strict inspection of {total_raw} raw IPs...")
+        logging.info(f"Initiating strict inspection of {total_raw} raw IPs with 15-second timeout...")
         start_time = time.time()
         
         # Live Telemetry: Inspection started broadcast to UI
