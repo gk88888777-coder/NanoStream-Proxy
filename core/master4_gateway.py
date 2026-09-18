@@ -6,7 +6,8 @@ import sys
 import logging
 import secrets
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks, WebSocket, WebSocketDisconnect
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import redis.asyncio as redis
 from cryptography.fernet import Fernet
@@ -28,6 +29,29 @@ logging.basicConfig(
 )
 
 app = FastAPI(title="NanoStream 4X Gateway", version="5.5.0")
+
+# --- CORS MIDDLEWARE ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], 
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# --- UI CONTROL PANEL ROUTE ---
+@app.get("/", response_class=HTMLResponse)
+async def serve_index():
+    """Serves the main Control Panel UI."""
+    try:
+        file_path = "index.html" 
+        if not os.path.exists(file_path):
+            file_path = "../index.html"
+            
+        with open(file_path, "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception as e:
+        return f"<h1>Error 404</h1><p>index.html not found. Error: {e}</p>"
 
 # Enterprise-grade fixed encryption key synchronized across engines
 DEFAULT_FIXED_KEY = "W3z9Lp7m1n4b6v8c0x3z5l7j9h1g3f5d7s9a2p4q6w8="
@@ -83,7 +107,8 @@ async def emit_gateway_telemetry(status: str, client_slot: str, target_domain: s
         "target_domain": target_domain,
         "execution_time_sec": round(execution_time, 4)
     }
-    await manager.broadcast(payload)
+    # FIXED: asyncio.create_task से ब्रॉडकास्ट सुरक्षित हो जाता है, सर्वर लटकता नहीं है
+    asyncio.create_task(manager.broadcast(payload))
 
 app.state.ui_broadcast = emit_gateway_telemetry
 
@@ -112,7 +137,11 @@ async def generate_api_key(req: KeyGenRequest, request: Request):
     api_key = f"ns_{secrets.token_hex(16)}"
     key_prefix = api_key[:8] + "..."
     
-    await redis_vault_keys.set(f"api_key:{api_key}", req.client_name)
+    if req.expiry_seconds:
+        await redis_vault_keys.set(f"api_key:{api_key}", req.client_name, ex=req.expiry_seconds)
+    else:
+        await redis_vault_keys.set(f"api_key:{api_key}", req.client_name)
+        
     logging.info(f"API Key successfully generated for client: {req.client_name}")
     return {"client_name": req.client_name, "api_key": api_key, "key_prefix": key_prefix}
 
@@ -183,7 +212,9 @@ async def gateway_proxy_handler(request: Request, background_tasks: BackgroundTa
         raise HTTPException(status_code=401, detail="Unauthorized: Invalid API Key.")
 
     target_domain = url_sentinel_shield(target_url, client_slot_name)
-    encrypted_ip_bytes = await redis_vault_proxies.spop("vip_proxy_pool")
+    
+    # FIXED: spop (डिलीट) की जगह srandmember (सिर्फ चुनना) इस्तेमाल किया है ताकि IP खत्म न हों!
+    encrypted_ip_bytes = await redis_vault_proxies.srandmember("vip_proxy_pool")
     
     if not encrypted_ip_bytes:
         background_tasks.add_task(emit_gateway_telemetry, "vault_empty_error", client_slot_name, target_domain, time.time() - start_time)
@@ -201,7 +232,8 @@ async def gateway_proxy_handler(request: Request, background_tasks: BackgroundTa
 
     try:
         transport = httpx.AsyncHTTPTransport(proxy=proxy_url)
-        proxy_client = httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(15.0, read=None), follow_redirects=True)
+        # FIXED: timeout बढ़ाया गया है ताकि बड़ी फाइलें फेल न हों
+        proxy_client = httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(30.0, read=None), follow_redirects=True)
         upstream_response = await proxy_client.get(target_url, headers=camouflaged_headers, stream=True)
         
         exec_time = time.time() - start_time
