@@ -54,7 +54,6 @@ ADMIN_MASTER_KEY = os.environ.get("ADMIN_MASTER_KEY", "nano_admin_777_secure")
 admin_api_key_header = APIKeyHeader(name="X-Admin-Key")
 
 async def verify_local_admin_shield(request: Request, admin_key: str = Security(admin_api_key_header)):
-    """Ensures the admin panel can ONLY be accessed locally from the server (127.0.0.1)."""
     client_ip = request.client.host if request.client else "unknown"
     if client_ip not in ["127.0.0.1", "::1", "localhost"]:
         logging.critical(f"SECURITY BREACH: External IP {client_ip} attempted unauthorized access to Admin Panel!")
@@ -73,7 +72,6 @@ async def lightning_rate_limit_and_shield_middleware(request: Request, call_next
     if request.url.path.startswith("/gateway"):
         client_id = request.headers.get("x-api-key") or request.headers.get("X-API-Key") or (request.client.host if request.client else "unknown")
         
-        # O(1) Fast check if client/IP is already auto-blocked
         if await redis_vault_keys.exists(f"auto_blocked:{client_id}"):
             return JSONResponse(
                 status_code=403, 
@@ -83,12 +81,10 @@ async def lightning_rate_limit_and_shield_middleware(request: Request, call_next
         current_second = int(time.time())
         redis_rate_key = f"rl:{client_id}:{current_second}"
         
-        # Nanosecond atomic increment
         requests_this_second = await redis_vault_keys.incr(redis_rate_key)
         if requests_this_second == 1:
             await redis_vault_keys.expire(redis_rate_key, 2)
             
-        # Strict Rule: Exactly 15 requests/sec limit. Exceeding triggers 10-minute auto-block.
         if requests_this_second > 15:
             logging.warning(f"RATE LIMIT BREACH: Auto-blocking client/IP {client_id} for exceeding 15 req/sec.")
             await redis_vault_keys.setex(f"auto_blocked:{client_id}", 600, "rate_limit_exceeded")
@@ -130,7 +126,6 @@ async def websocket_telemetry(websocket: WebSocket):
         if websocket in active_websockets:
             active_websockets.remove(websocket)
 
-# Connect Engines to Broadcaster
 gateway_app.state.ui_broadcast = ui_dashboard_broadcaster
 hunter = ProxyHunter(ui_broadcast_callback=ui_dashboard_broadcaster)
 inspector = ProxyInspector(ui_broadcast_callback=ui_dashboard_broadcaster)
@@ -174,7 +169,7 @@ async def startup_event():
 # ==========================================
 class CreateKeyRequest(BaseModel):
     client_name: str
-    expiry_seconds: Optional[int] = None  # None = Permanent, Int = Timed Subscription
+    expiry_seconds: Optional[int] = None
 
 @app.post("/admin/keys/generate", dependencies=[Depends(verify_local_admin_shield)])
 async def generate_api_key(request: CreateKeyRequest):
@@ -218,16 +213,10 @@ async def list_api_keys():
         })
     return {"active_clients": active_clients, "total_active": len(keys)}
 
-# ==========================================
-# SERVING THE DASHBOARD UI
-# ==========================================
 @app.get("/")
 async def premium_dashboard():
     return FileResponse("index.html")
 
-# ==========================================
-# MOUNTING ENGINE 4 (GATEWAY)
-# ==========================================
 app.mount("/gateway", gateway_app)
 
 if __name__ == "__main__":
