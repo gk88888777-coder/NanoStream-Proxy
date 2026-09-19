@@ -1,34 +1,30 @@
 import asyncio
 import uvicorn
 import json
+import secrets
 from fastapi import FastAPI, HTTPException, Depends, Security, Request, WebSocket, WebSocketDisconnect
 from fastapi.security import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from pydantic import BaseModel
 import redis.asyncio as redis
-import uuid
 import logging
 import time
 import os
 from typing import Dict, Any, List, Optional
 
-# ==========================================
-# 1. IMPORTING THE STABLE 4-ENGINE ARCHITECTURE
-# ==========================================
 from core.master1_hunter import ProxyHunter
 from core.master2_inspector import ProxyInspector
 from core.master3_vault_doctor import VaultDoctor
 from core.master4_gateway import app as gateway_app
 
-# Enterprise Logging Setup
 logging.basicConfig(
     level=logging.INFO, 
     format='%(asctime)s - [NANOSTREAM-MASTER-CORE] - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
-app = FastAPI(title="NanoStream-Proxy Control Room", version="5.0.0")
+app = FastAPI(title="NanoStream-Proxy Control Room", version="5.2.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -38,18 +34,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ==========================================
-# SPEED LAYER: HIGH-PERFORMANCE REDIS POOL
-# ==========================================
 redis_pool_proxies = redis.ConnectionPool(host='127.0.0.1', port=6379, db=0, max_connections=100)
 redis_pool_keys = redis.ConnectionPool(host='127.0.0.1', port=6379, db=1, decode_responses=True, max_connections=100)
 
 redis_vault_proxies = redis.Redis(connection_pool=redis_pool_proxies)
 redis_vault_keys = redis.Redis(connection_pool=redis_pool_keys)
 
-# ==========================================
-# SECURITY LAYER 1: STRICT LOCAL ADMIN SHIELD
-# ==========================================
 ADMIN_MASTER_KEY = os.environ.get("ADMIN_MASTER_KEY", "nano_admin_777_secure")
 admin_api_key_header = APIKeyHeader(name="X-Admin-Key")
 
@@ -64,30 +54,28 @@ async def verify_local_admin_shield(request: Request, admin_key: str = Security(
         raise HTTPException(status_code=403, detail="Forbidden: Master Admin Key Invalid.")
     return admin_key
 
-# ==========================================
-# SECURITY LAYER 2: 15-REQ/SEC RATE LIMIT & AUTO-BLOCK
-# ==========================================
 @app.middleware("http")
 async def lightning_rate_limit_and_shield_middleware(request: Request, call_next):
     if request.url.path.startswith("/gateway"):
-        client_id = request.headers.get("x-api-key") or request.headers.get("X-API-Key") or (request.client.host if request.client else "unknown")
+        client_ip = request.client.host if request.client else "unknown"
         
-        if await redis_vault_keys.exists(f"auto_blocked:{client_id}"):
+        # Check if IP is auto-blocked due to brute-force or rate limit
+        if await redis_vault_keys.exists(f"auto_blocked_ip:{client_ip}") or await redis_vault_keys.exists(f"auto_blocked:{client_ip}"):
             return JSONResponse(
                 status_code=403, 
-                content={"detail": "Forbidden: This Key/IP has been auto-blocked due to rate-limit violation."}
+                content={"detail": "Forbidden: Your IP/Key has been auto-blocked due to security violation or rate limit."}
             )
             
         current_second = int(time.time())
-        redis_rate_key = f"rl:{client_id}:{current_second}"
+        redis_rate_key = f"rl:{client_ip}:{current_second}"
         
         requests_this_second = await redis_vault_keys.incr(redis_rate_key)
         if requests_this_second == 1:
             await redis_vault_keys.expire(redis_rate_key, 2)
             
         if requests_this_second > 15:
-            logging.warning(f"RATE LIMIT BREACH: Auto-blocking client/IP {client_id} for exceeding 15 req/sec.")
-            await redis_vault_keys.setex(f"auto_blocked:{client_id}", 600, "rate_limit_exceeded")
+            logging.warning(f"RATE LIMIT BREACH: Auto-blocking client/IP {client_ip} for exceeding 15 req/sec.")
+            await redis_vault_keys.setex(f"auto_blocked:{client_ip}", 600, "rate_limit_exceeded")
             return JSONResponse(
                 status_code=429, 
                 content={"detail": "Too Many Requests: Limit is 15 req/sec. Key/IP has been auto-blocked for 10 minutes."}
@@ -95,9 +83,6 @@ async def lightning_rate_limit_and_shield_middleware(request: Request, call_next
             
     return await call_next(request)
 
-# ==========================================
-# LIVE UI TELEMETRY (WEBSOCKET BROADCASTER)
-# ==========================================
 active_websockets: List[WebSocket] = []
 
 async def ui_dashboard_broadcaster(payload: Dict[str, Any]):
@@ -131,9 +116,6 @@ hunter = ProxyHunter(ui_broadcast_callback=ui_dashboard_broadcaster)
 inspector = ProxyInspector(ui_broadcast_callback=ui_dashboard_broadcaster)
 doctor = VaultDoctor(ui_broadcast_callback=ui_dashboard_broadcaster)
 
-# ==========================================
-# BACKGROUND ORCHESTRATION LOOPS (ENGINES 1-3)
-# ==========================================
 async def proxy_supply_chain_loop():
     while True:
         try:
@@ -164,16 +146,17 @@ async def startup_event():
     asyncio.create_task(proxy_supply_chain_loop())
     asyncio.create_task(vault_maintenance_loop())
 
-# ==========================================
-# CONTROL PANEL APIs (DUAL-MODE KEYS)
-# ==========================================
 class CreateKeyRequest(BaseModel):
     client_name: str
     expiry_seconds: Optional[int] = None
 
+class KeyRevokeRequest(BaseModel):
+    client_name: str
+
 @app.post("/admin/keys/generate", dependencies=[Depends(verify_local_admin_shield)])
 async def generate_api_key(request: CreateKeyRequest):
-    new_key = f"ns_{uuid.uuid4().hex}"
+    # Perfect length control: 'ns_' + 32 hex chars = 35 characters total (Secure & Un-guessable)
+    new_key = f"ns_{secrets.token_hex(16)}"
     redis_key_name = f"api_key:{new_key}"
     
     if request.expiry_seconds and request.expiry_seconds > 0:
@@ -191,13 +174,21 @@ async def generate_api_key(request: CreateKeyRequest):
         "type": key_type
     }
 
-@app.delete("/admin/keys/revoke/{api_key}", dependencies=[Depends(verify_local_admin_shield)])
-async def revoke_api_key(api_key: str):
-    result = await redis_vault_keys.delete(f"api_key:{api_key}")
-    if result == 0:
-        raise HTTPException(status_code=404, detail="API Key not found in vault.")
-    logging.info(f"ADMIN ACTION -> Revoked API key successfully.")
-    return {"message": "Key revoked successfully"}
+@app.post("/admin/keys/revoke", dependencies=[Depends(verify_local_admin_shield)])
+async def revoke_api_key_by_name(request: KeyRevokeRequest):
+    keys = await redis_vault_keys.keys("api_key:*")
+    revoked_count = 0
+    for k in keys:
+        client_name = await redis_vault_keys.get(k)
+        if client_name == request.client_name:
+            await redis_vault_keys.delete(k)
+            revoked_count += 1
+            
+    if revoked_count == 0:
+        raise HTTPException(status_code=404, detail="Client not found in active vault.")
+        
+    logging.info(f"ADMIN ACTION -> Revoked API key for client: {request.client_name}")
+    return {"status": "success", "message": f"Revoked access for {request.client_name}"}
 
 @app.get("/admin/keys/list", dependencies=[Depends(verify_local_admin_shield)])
 async def list_api_keys():
@@ -213,15 +204,8 @@ async def list_api_keys():
         })
     return {"active_clients": active_clients, "total_active": len(keys)}
 
-# ==========================================
-# BULLETPROOF DASHBOARD ROUTE (ABSOLUTE PATH)
-# ==========================================
 @app.get("/")
 async def premium_dashboard():
-    """
-    Serves index.html using an absolute path.
-    Guarantees no 'Not Found' 404 JSON errors occur during updates.
-    """
     try:
         base_dir = os.path.dirname(os.path.abspath(__file__))
         file_path = os.path.join(base_dir, "index.html")
