@@ -1,427 +1,406 @@
 <!DOCTYPE html>
-<html lang="hi">
+<html lang="en" class="h-full">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NanoStream 4X - Master Control Room</title>
+    <title>NanoStream 4X // Executive Control Room</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        :root {
-            --bg-color: #f4ebd0;
-            --card-bg: #fffdf9;
-            --text-main: #2d2319;
-            --accent-green: #15803d;
-            --accent-red: #b91c1c;
-            --accent-gold: #d97706;
-            --border-color: #e6d5bc;
-            --muted-text: #78716c;
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+        
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            background: linear-gradient(135deg, #e6ca95 0%, #d8bc80 50%, #c59f52 100%);
+            color: #1f170c;
+            min-height: 100vh;
         }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            margin: 0;
-            padding: 16px;
-            display: flex;
-            justify-content: center;
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        
+        .glass-panel { 
+            background: rgba(255, 255, 255, 0.75); 
+            backdrop-filter: blur(16px); 
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            box-shadow: 0 10px 30px rgba(80, 55, 15, 0.12);
         }
-        .container {
-            width: 100%;
-            max-width: 650px;
+        
+        .cyber-blue { border-left: 4px solid #3b82f6; }
+        .cyber-purple { border-left: 4px solid #a855f7; }
+        .cyber-green { border-left: 4px solid #10b981; }
+        .cyber-pink { border-left: 4px solid #ec4899; }
+
+        .engine-card { 
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); 
+            cursor: pointer; 
         }
-        .header-card, .card {
-            background-color: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
-            padding: 20px;
-            margin-bottom: 16px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+        .engine-card:hover { 
+            transform: translateY(-4px); 
+            box-shadow: 0 16px 35px rgba(90, 60, 20, 0.18);
+            background: rgba(255, 255, 255, 0.9);
         }
-        .header-title {
-            font-size: 13px;
-            font-weight: 700;
-            letter-spacing: 1px;
-            color: #78350f;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        .status-badge {
-            width: 8px;
-            height: 8px;
-            background-color: var(--accent-green);
-            border-radius: 50%;
-            display: inline-block;
-            box-shadow: 0 0 6px var(--accent-green);
-        }
-        .hidden { display: none !important; }
-        input, select {
-            width: 100%;
-            padding: 12px;
-            margin: 8px 0 16px 0;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            background: #fff;
-            box-sizing: border-box;
-            font-size: 14px;
-            color: var(--text-main);
-        }
-        button {
-            width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: 8px;
-            font-weight: bold;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        .btn-primary { background-color: var(--accent-gold); color: white; }
-        .btn-success { background-color: var(--accent-green); color: white; }
-        .btn-danger { background-color: var(--accent-red); color: white; padding: 6px 12px; width: auto; font-size: 12px; }
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-            margin-bottom: 16px;
-        }
-        @media (min-width: 500px) {
-            .stats-grid { grid-template-columns: repeat(4, 1fr); }
-        }
-        .stat-box {
-            background: #fff;
-            padding: 12px;
-            border-radius: 10px;
-            border: 1px solid var(--border-color);
-            text-align: center;
-        }
-        .stat-value { font-size: 16px; font-weight: bold; color: #b45309; }
-        .stat-label { font-size: 11px; color: var(--muted-text); margin-top: 4px; text-transform: uppercase; }
-        .client-item {
-            background: #fff;
-            padding: 12px 14px;
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
-            margin-bottom: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .terminal-box {
-            background: #1e1b18;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 12px;
-            font-family: monospace;
-            font-size: 11px;
-            color: #4ade80;
-            height: 100px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            line-height: 1.4;
-            margin-top: 10px;
-        }
-        .error-msg { color: var(--accent-red); font-size: 13px; text-align: center; margin-top: 10px; }
-        .success-box { background: #f0fdf4; border: 1px solid #bbf7d0; padding: 12px; border-radius: 8px; font-size: 13px; margin-top: 10px; color: #166534; word-break: break-all; }
     </style>
 </head>
-<body>
-
-<div class="container">
-    <!-- Header -->
-    <div class="header-card">
-        <div class="header-title">
-            <span><span class="status-badge" id="ws-indicator"></span> NANOSTREAM 4X // COMMAND CENTER</span>
-            <div id="auth-action-slot"></div>
-        </div>
-        <div style="font-size: 12px; color: var(--muted-text); margin-top: 4px;">Enterprise-Grade Proxy Gateway & Zero-Trust Vault Control</div>
-    </div>
-
-    <!-- Login Section -->
-    <div id="login-section" class="card">
-        <h3>🔑 MASTER ADMIN KEY REQUIRED</h3>
-        <p style="font-size: 13px; color: var(--muted-text);">Enter administrative master credentials to manage Vault keys.</p>
-        <input type="password" id="admin-key-input" placeholder="Enter Master Admin Key (e.g. nano_admin_777_secure)">
-        <button class="btn-primary" onclick="unlockControlRoom()">Unlock Control Room ⚡</button>
-        <div id="login-error" class="error-msg"></div>
-    </div>
-
-    <!-- Dashboard Section -->
-    <div id="dashboard-section" class="hidden">
+<body class="p-4 md:p-8 flex flex-col justify-between selection:bg-amber-600 selection:text-white">
+    <div class="max-w-4xl mx-auto w-full space-y-6">
         
-        <div class="card">
-            <h3 style="margin-top: 0; font-size: 15px; color: #78350f; margin-bottom: 12px;">⚡ 4-ENGINE LIVE TELEMETRY MATRIX</h3>
+        <!-- Header -->
+        <header class="glass-panel p-4 md:p-5 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4">
+            <div class="space-y-0.5 text-center md:text-left">
+                <div class="flex items-center justify-center md:justify-start gap-2">
+                    <span class="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                    <h1 class="text-xs font-extrabold tracking-widest text-amber-950 uppercase mono">NANOSTREAM 4X // EXECUTIVE COMMAND</h1>
+                </div>
+                <p class="text-[11px] mono text-amber-900/80 font-medium">Enterprise Proxy Gateway & Vault Control</p>
+            </div>
+            <div class="flex gap-2 bg-amber-950/5 p-1.5 rounded-xl border border-amber-950/10">
+                <button onclick="switchScreen('command')" id="btn-cmd" class="px-4 py-2 rounded-lg text-xs mono font-bold bg-blue-600 text-white shadow-md transition-all">Command Center</button>
+                <button onclick="switchScreen('vault')" id="btn-vault" class="px-4 py-2 rounded-lg text-xs mono font-bold text-amber-950 hover:bg-amber-950/10 transition-all">Vault & Admin</button>
+            </div>
+        </header>
 
-            <!-- Stats Grid -->
-            <div class="stats-grid">
-                <div class="stat-box">
-                    <div id="stat-proxies" class="stat-value">--</div>
-                    <div class="stat-label">Hunter / Pool</div>
-                </div>
-                <div class="stat-box">
-                    <div id="eng2-status" class="stat-value" style="color: #15803d;">Active</div>
-                    <div class="stat-label">Inspector</div>
-                </div>
-                <div class="stat-box">
-                    <div id="eng3-purged" class="stat-value">0</div>
-                    <div class="stat-label">Doctor Purged</div>
-                </div>
-                <div class="stat-box">
-                    <div id="stat-clients" class="stat-value">--</div>
-                    <div class="stat-label">Active Clients</div>
-                </div>
+        <!-- Command Center -->
+        <section id="screen-command" class="space-y-4">
+            <div class="flex justify-between items-center px-1">
+                <span class="text-xs mono font-bold text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>⚡</span> 4X Engine Clusters (Live Status)
+                </span>
+                <span id="ws-status" class="text-amber-800 bg-amber-500/20 px-2.5 py-1 rounded-full border border-amber-500/30 font-bold text-[11px] mono flex items-center gap-1.5 shadow-sm">
+                    <span class="w-2 h-2 rounded-full bg-amber-600 animate-pulse"></span> Connecting WS...
+                </span>
             </div>
 
-            <!-- Terminal Log Stream -->
-            <div style="font-size: 12px; font-weight: bold; color: var(--text-main); margin-top: 15px;">📡 Live Telemetry Stream</div>
-            <div id="terminal-log" class="terminal-box">[SYSTEM] Initializing live telemetry connection...</div>
-        </div>
-
-        <!-- Key Generation Form -->
-        <div class="card">
-            <h3 style="margin-top: 0; font-size: 15px; color: #78350f; margin-bottom: 12px;">🔑 VIP API KEY CONTROL</h3>
-            <input type="text" id="client-name-input" placeholder="Client Name (e.g. VideoDownloader)">
-            
-            <label style="font-size: 13px; font-weight: bold; display: block; margin-bottom: 4px;">Key Validity / Expiry Duration:</label>
-            <select id="expiry-select" onchange="toggleCustomExpiry()">
-                <option value="0">Permanent (Unlimited)</option>
-                <option value="3600">1 Hour</option>
-                <option value="86400">24 Hours (1 Day)</option>
-                <option value="604800">7 Days</option>
-                <option value="custom">Custom Seconds...</option>
-            </select>
-            <input type="number" id="custom-seconds-input" class="hidden" placeholder="Enter expiry time in seconds">
-
-            <button class="btn-success" onclick="generateApiKey()">Generate API Key ⚡</button>
-            <div id="generation-result" class="hidden success-box"></div>
-        </div>
-
-        <!-- Active Clients List -->
-        <div class="card">
-            <h3 style="margin-top: 0; font-size: 15px; color: #78350f; margin-bottom: 12px;">🛡️ ACTIVE AUTHORIZED CLIENTS</h3>
-            <div id="clients-list-container">
-                <p style="font-size: 13px; color: var(--muted-text);">Loading active clients...</p>
-            </div>
-        </div>
-
-    </div>
-</div>
-
-<script>
-    let ADMIN_KEY = localStorage.getItem("nano_admin_key") || "";
-
-    if (ADMIN_KEY) {
-        verifyAndOpenDashboard();
-    }
-
-    async function unlockControlRoom() {
-        const keyInput = document.getElementById("admin-key-input").value.trim();
-        const errorDiv = document.getElementById("login-error");
-        
-        if (!keyInput) {
-            errorDiv.innerText = "Please enter the master key.";
-            return;
-        }
-
-        ADMIN_KEY = keyInput;
-        try {
-            const res = await fetch('/admin/keys/list', {
-                headers: { 'X-Admin-Key': ADMIN_KEY }
-            });
-            if (res.ok) {
-                localStorage.setItem("nano_admin_key", ADMIN_KEY);
-                showDashboard();
-            } else {
-                errorDiv.innerText = "Access Denied! Invalid Master Admin Key.";
-                ADMIN_KEY = "";
-            }
-        } catch (e) {
-            errorDiv.innerText = "Cannot connect to Master Backend.";
-        }
-    }
-
-    async function verifyAndOpenDashboard() {
-        try {
-            const res = await fetch('/admin/keys/list', {
-                headers: { 'X-Admin-Key': ADMIN_KEY }
-            });
-            if (res.ok) {
-                showDashboard();
-            } else {
-                lockVault();
-            }
-        } catch (e) {
-            lockVault();
-        }
-    }
-
-    function showDashboard() {
-        document.getElementById("login-section").classList.add("hidden");
-        document.getElementById("dashboard-section").classList.remove("hidden");
-        document.getElementById("auth-action-slot").innerHTML = `<button class="btn-danger" onclick="lockVault()">Lock Vault 🔒</button>`;
-        loadActiveClients();
-        initWebSocket();
-    }
-
-    function lockVault() {
-        localStorage.removeItem("nano_admin_key");
-        ADMIN_KEY = "";
-        document.getElementById("dashboard-section").classList.add("hidden");
-        document.getElementById("login-section").classList.remove("hidden");
-        document.getElementById("auth-action-slot").innerHTML = "";
-        document.getElementById("admin-key-input").value = "";
-    }
-
-    function toggleCustomExpiry() {
-        const val = document.getElementById("expiry-select").value;
-        const customInput = document.getElementById("custom-seconds-input");
-        if (val === "custom") {
-            customInput.classList.remove("hidden");
-        } else {
-            customInput.classList.add("hidden");
-        }
-    }
-
-    async function generateApiKey() {
-        const clientName = document.getElementById("client-name-input").value.trim();
-        const expirySelect = document.getElementById("expiry-select").value;
-        let expirySeconds = 0;
-
-        if (!clientName) {
-            alert("Please enter a client name.");
-            return;
-        }
-
-        if (expirySelect === "custom") {
-            expirySeconds = parseInt(document.getElementById("custom-seconds-input").value) || 0;
-        } else {
-            expirySeconds = parseInt(expirySelect);
-        }
-
-        try {
-            const res = await fetch('/admin/keys/generate', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Admin-Key': ADMIN_KEY
-                },
-                body: JSON.stringify({ client_name: clientName, expiry_seconds: expirySeconds })
-            });
-
-            const data = await res.json();
-            const resultBox = document.getElementById("generation-result");
-            if (res.ok) {
-                resultBox.classList.remove("hidden");
-                resultBox.innerHTML = `<strong>Success! API Key Generated:</strong><br><code>${data.api_key}</code><br><small>Type: ${data.type}</small>`;
-                document.getElementById("client-name-input").value = "";
-                loadActiveClients();
-                appendLog(`[ADMIN] Generated API key for ${clientName}`);
-            } else {
-                alert("Error: " + (data.detail || "Failed to generate"));
-            }
-        } catch (e) {
-            alert("Network error while generating key.");
-        }
-    }
-
-    async function loadActiveClients() {
-        try {
-            const res = await fetch('/admin/keys/list', {
-                headers: { 'X-Admin-Key': ADMIN_KEY }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                document.getElementById("stat-clients").innerText = data.total_active;
+            <!-- 4 Engines -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 
-                const container = document.getElementById("clients-list-container");
-                if (data.active_clients.length === 0) {
-                    container.innerHTML = `<p style="font-size: 13px; color: var(--muted-text);">No active clients found in vault.</p>`;
-                    return;
-                }
+                <!-- Engine 1: Proxy Hunter -->
+                <div onclick="openModal('alpha')" class="glass-panel p-5 rounded-2xl engine-card cyber-blue relative overflow-hidden">
+                    <div class="flex justify-between items-start mb-2 text-xs mono">
+                        <span class="text-blue-700 font-extrabold tracking-wide">ENGINE 1: HUNTER</span>
+                        <span id="badge-eng1" class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-500/20 text-rose-800">Deactivated</span>
+                    </div>
+                    <h3 class="font-bold text-base text-slate-900 mb-2">Proxy Hunter Core</h3>
+                    <div class="space-y-1.5 text-xs mono text-slate-700 bg-white/60 p-3 rounded-xl border border-blue-500/10">
+                        <div class="flex justify-between"><span>Raw IPs Found:</span> <span id="ui-eng1-ips" class="text-blue-700 font-bold">--</span></div>
+                        <div class="flex justify-between"><span>Execution Time:</span> <span id="ui-eng1-time" class="text-slate-900">--</span></div>
+                        <div class="flex justify-between"><span>Active Sources:</span> <span id="ui-eng1-sources" class="text-emerald-700 font-bold">--</span></div>
+                    </div>
+                </div>
 
-                let html = "";
-                data.active_clients.forEach(client => {
-                    html += `
-                        <div class="client-item">
-                            <div>
-                                <strong>${client.client_name}</strong><br>
-                                <small style="color: var(--muted-text);">Prefix: ${client.key_prefix} | Type: ${client.type}</small>
-                            </div>
-                            <button class="btn-danger" onclick="revokeClient('${client.client_name}')">Revoke</button>
+                <!-- Engine 2: Inspector -->
+                <div onclick="openModal('beta')" class="glass-panel p-5 rounded-2xl engine-card cyber-purple relative overflow-hidden">
+                    <div class="flex justify-between items-start mb-2 text-xs mono">
+                        <span class="text-purple-700 font-extrabold tracking-wide">ENGINE 2: INSPECTOR</span>
+                        <span id="badge-eng2" class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-500/20 text-rose-800">Deactivated</span>
+                    </div>
+                    <h3 class="font-bold text-base text-slate-900 mb-2">Proxy Inspector</h3>
+                    <div class="space-y-1.5 text-xs mono text-slate-700 bg-white/60 p-3 rounded-xl border border-purple-500/10">
+                        <div class="flex justify-between"><span>IPs Tested:</span> <span id="ui-eng2-tested" class="text-slate-900">--</span></div>
+                        <div class="flex justify-between"><span>Elite Passed:</span> <span id="ui-eng2-passed" class="text-purple-700 font-bold">--</span></div>
+                        <div class="flex justify-between"><span>Vault Status:</span> <span id="ui-eng2-vault" class="text-emerald-700 font-bold">Encrypted</span></div>
+                    </div>
+                </div>
+
+                <!-- Engine 3: Doctor -->
+                <div onclick="openModal('gamma')" class="glass-panel p-5 rounded-2xl engine-card cyber-green relative overflow-hidden">
+                    <div class="flex justify-between items-start mb-2 text-xs mono">
+                        <span class="text-emerald-700 font-extrabold tracking-wide">ENGINE 3: DOCTOR</span>
+                        <span id="badge-eng3" class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-500/20 text-rose-800">Deactivated</span>
+                    </div>
+                    <h3 class="font-bold text-base text-slate-900 mb-2">Vault Doctor</h3>
+                    <div class="space-y-1.5 text-xs mono text-slate-700 bg-white/60 p-3 rounded-xl border border-emerald-500/10">
+                        <div class="flex justify-between"><span>Health Score:</span> <span id="ui-eng3-health" class="text-emerald-700 font-bold">--</span></div>
+                        <div class="flex justify-between"><span>Purged Dead:</span> <span id="ui-eng3-purged" class="text-rose-700 font-bold">--</span></div>
+                        <div class="flex justify-between"><span>Stream Scan:</span> <span id="ui-eng3-stream" class="text-slate-900">--</span></div>
+                    </div>
+                </div>
+
+                <!-- Engine 4: Gateway -->
+                <div onclick="openModal('delta')" class="glass-panel p-5 rounded-2xl engine-card cyber-pink relative overflow-hidden">
+                    <div class="flex justify-between items-start mb-2 text-xs mono">
+                        <span class="text-pink-700 font-extrabold tracking-wide">ENGINE 4: GATEWAY</span>
+                        <span id="badge-eng4" class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-500/20 text-rose-800">Deactivated</span>
+                    </div>
+                    <h3 class="font-bold text-base text-slate-900 mb-2">Ultra-Gateway</h3>
+                    <div class="space-y-1.5 text-xs mono text-slate-700 bg-white/60 p-3 rounded-xl border border-pink-500/10">
+                        <div class="flex justify-between"><span>Active Client:</span> <span id="ui-eng4-client" class="text-slate-900 font-bold">--</span></div>
+                        <div class="flex justify-between"><span>Throughput:</span> <span id="ui-eng4-throughput" class="text-pink-700 font-bold">--</span></div>
+                        <div class="flex justify-between"><span>HTTP Status:</span> <span id="ui-eng4-http" class="text-emerald-700 font-bold">--</span></div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Admin Vault Screen -->
+        <section id="screen-vault" class="space-y-4 hidden">
+            <div id="vault-login-box" class="glass-panel p-8 rounded-3xl max-w-md mx-auto text-center space-y-4 shadow-xl">
+                <div class="w-14 h-14 rounded-2xl bg-amber-800/10 border border-amber-800/30 flex items-center justify-center mx-auto text-amber-950 font-bold text-xl">🔒</div>
+                <h3 class="text-sm mono text-amber-950 font-extrabold uppercase">Master Admin Key Required</h3>
+                <input type="password" id="vault-key" placeholder="Enter Master Admin Key..." class="w-full bg-white/90 border border-amber-900/30 rounded-xl px-4 py-3 text-xs mono text-slate-900 focus:outline-none">
+                <button onclick="unlockVault()" class="w-full py-3 bg-amber-800 hover:bg-amber-900 text-white font-extrabold text-xs mono rounded-xl shadow-lg transition-all">Unlock Control Room ⚡</button>
+            </div>
+            
+            <div id="unlocked-vault-box" class="glass-panel p-6 rounded-3xl space-y-5 shadow-xl max-w-3xl mx-auto hidden">
+                <div class="flex justify-between items-center border-b border-amber-900/20 pb-3">
+                    <h4 class="text-sm mono text-amber-950 font-extrabold uppercase">🔑 Key Control Center</h4>
+                    <button onclick="lockVault()" class="text-[11px] bg-rose-600/10 text-rose-700 px-3 py-1.5 rounded-lg border border-rose-600/20 font-bold">Lock Vault 🔒</button>
+                </div>
+                <div id="active-keys-list" class="space-y-2.5 max-h-52 overflow-y-auto"></div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Modal Box -->
+    <div id="modal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-md hidden flex items-center justify-center p-4 z-50">
+        <div class="glass-panel w-full max-w-lg rounded-3xl border border-amber-900/40 shadow-2xl flex flex-col overflow-hidden">
+            <div class="flex justify-between items-center px-5 py-4 bg-amber-900/15 border-b border-amber-900/25 text-xs mono">
+                <span id="m-title" class="font-bold text-amber-950 text-base">Engine Diagnostics</span>
+                <button onclick="closeModal()" class="w-8 h-8 rounded-xl bg-amber-900/20 text-amber-950 font-bold flex items-center justify-center text-base">&times;</button>
+            </div>
+            <div id="modal-body" class="p-6 space-y-3 text-xs mono text-slate-900"></div>
+        </div>
+    </div>
+
+    <script>
+        let storedAdminKey = "";
+        let liveTelemetryStore = {
+            hunted_count: "--",
+            tested_count: "--",
+            elite_passed: "--",
+            purged_count: "--",
+            execution_time: "--",
+            throughput: "--",
+            health_score: "--",
+            active_client: "--",
+            hunter_status: "Deactivated",
+            inspector_status: "Deactivated",
+            doctor_status: "Deactivated",
+            gateway_status: "Activated",
+            sources_active: "--",
+            stream_scan: "Activated",
+            http_status: "200 OK"
+        };
+
+        let activeModalEngine = null;
+
+        // Dynamic Source Tracking Function
+        function formatSourcesText(sources) {
+            if (sources === undefined || sources === null || sources === "--") return "--";
+            if (Array.isArray(sources)) return `${sources.length} Endpoints`;
+            if (typeof sources === 'number') return `${sources} Endpoints`;
+            if (typeof sources === 'string') {
+                return sources.toLowerCase().includes('endpoint') ? sources : `${sources} Endpoints`;
+            }
+            return "--";
+        }
+
+        function getStatusBadge(statusVal) {
+            const isAct = statusVal && (
+                statusVal.toString().toLowerCase().includes('active') || 
+                statusVal.toString().toLowerCase().includes('running') || 
+                statusVal.toString().toLowerCase().includes('live') || 
+                statusVal === true
+            );
+            return isAct 
+                ? { text: "Activated", class: "bg-emerald-500/20 text-emerald-800" } 
+                : { text: "Deactivated", class: "bg-rose-500/20 text-rose-800" };
+        }
+
+        function getEngineModalData(engineKey) {
+            const data = liveTelemetryStore;
+            if (engineKey === 'alpha') {
+                const st = getStatusBadge(data.hunter_status);
+                const displaySources = formatSourcesText(data.sources_active);
+                return {
+                    title: "Engine 1: Proxy Hunter Telemetry",
+                    body: `
+                        <div class="space-y-3">
+                            <div class="flex justify-between border-b pb-2"><span>Engine Status:</span> <span class="font-bold ${st.class.split(' ')[1]}">${st.text}</span></div>
+                            <div class="flex justify-between border-b pb-2"><span>Raw IPs Found:</span> <span class="font-bold text-slate-900">${data.hunted_count}</span></div>
+                            <div class="flex justify-between border-b pb-2"><span>Execution Time:</span> <span class="text-slate-900">${data.execution_time}</span></div>
+                            <div class="flex justify-between border-b pb-2"><span>Active Sources:</span> <span class="font-bold text-emerald-700">${displaySources}</span></div>
                         </div>
-                    `;
-                });
-                container.innerHTML = html;
+                    `
+                };
             }
-        } catch (e) {
-            console.error("Failed to load clients");
+            return { title: "Diagnostics", body: "" };
         }
-    }
 
-    async function revokeClient(clientName) {
-        if (!confirm(`Are you sure you want to revoke access for ${clientName}?`)) return;
+        function openModal(engineKey) {
+            activeModalEngine = engineKey;
+            const modalData = getEngineModalData(engineKey);
+            document.getElementById('m-title').innerText = modalData.title;
+            document.getElementById('modal-body').innerHTML = modalData.body;
+            document.getElementById('modal').classList.remove('hidden');
+        }
 
-        try {
-            const res = await fetch('/admin/keys/revoke', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-Admin-Key': ADMIN_KEY
-                },
-                body: JSON.stringify({ client_name: clientName })
-            });
+        function closeModal() {
+            activeModalEngine = null;
+            document.getElementById('modal').classList.add('hidden');
+        }
 
-            if (res.ok) {
-                loadActiveClients();
-                appendLog(`[ADMIN] Revoked ${clientName}`);
+        // Live Telemetry Receiver
+        function updateTelemetryUI(data) {
+            Object.assign(liveTelemetryStore, data);
+
+            if (data.hunted_count !== undefined) document.getElementById('ui-eng1-ips').innerText = data.hunted_count;
+            if (data.execution_time !== undefined) document.getElementById('ui-eng1-time').innerText = data.execution_time;
+            if (data.sources_active !== undefined) {
+                document.getElementById('ui-eng1-sources').innerText = formatSourcesText(data.sources_active);
+            }
+            if (data.hunter_status !== undefined) {
+                const st = getStatusBadge(data.hunter_status);
+                const el = document.getElementById('badge-eng1');
+                el.innerText = st.text;
+                el.className = `px-2 py-0.5 rounded-md text-[10px] font-bold ${st.class}`;
+            }
+
+            if (activeModalEngine) {
+                const modalData = getEngineModalData(activeModalEngine);
+                document.getElementById('modal-body').innerHTML = modalData.body;
+            }
+        }
+
+        function switchScreen(screen) {
+            const cmdScreen = document.getElementById('screen-command');
+            const vaultScreen = document.getElementById('screen-vault');
+            if (screen === 'command') {
+                cmdScreen.classList.remove('hidden');
+                vaultScreen.classList.add('hidden');
             } else {
-                alert("Failed to revoke client.");
+                cmdScreen.classList.add('hidden');
+                vaultScreen.classList.remove('hidden');
             }
-        } catch (e) {
-            alert("Network error.");
         }
-    }
 
-    function appendLog(msg) {
-        const term = document.getElementById("terminal-log");
-        const time = new Date().toLocaleTimeString();
-        term.innerHTML += `\n[${time}] ${msg}`;
-        term.scrollTop = term.scrollHeight;
-    }
+        // Fetch Active Keys (Unique Identifier Mapping Included)
+        async function fetchActiveKeys() {
+            if (!storedAdminKey) return;
+            const listContainer = document.getElementById('active-keys-list');
 
-    function initWebSocket() {
-        const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-        const wsUrl = protocol + window.location.host + '/ws/telemetry';
-        const ws = new WebSocket(wsUrl);
-
-        ws.onopen = function() {
-            document.getElementById("ws-indicator").style.backgroundColor = "#15803d";
-            appendLog("[WS] Connected to live telemetry feed.");
-        };
-
-        ws.onclose = function() {
-            document.getElementById("ws-indicator").style.backgroundColor = "#b91c1c";
-            appendLog("[WS] Connection lost. Reconnecting...");
-            setTimeout(initWebSocket, 3000);
-        };
-
-        ws.onmessage = function(event) {
             try {
-                const data = JSON.parse(event.data);
-                if (data.available_proxies !== undefined) {
-                    document.getElementById("stat-proxies").innerText = data.available_proxies;
-                }
-                if (data.hunted_count !== undefined) {
-                    appendLog(`[HUNTER] Discovered ${data.hunted_count} raw IPs`);
-                }
-                if (data.purged_count !== undefined) {
-                    document.getElementById("eng3-purged").innerText = data.purged_count;
-                }
-                if (data.log_message) {
-                    appendLog(data.log_message);
-                }
-            } catch (e) {}
-        };
-    }
-</script>
+                const response = await fetch('/admin/keys/list', {
+                    headers: { 'X-Admin-Key': storedAdminKey }
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    if (!data.active_clients || data.active_clients.length === 0) {
+                        listContainer.innerHTML = `<div class="text-center p-3 text-xs text-slate-500 mono">No active client keys found.</div>`;
+                        return;
+                    }
 
+                    let html = "";
+                    data.active_clients.forEach(c => {
+                        // Using unique key_id or exact key string for isolated target selection
+                        const targetId = c.key_id || c.client_name;
+                        html += `
+                            <div class="flex justify-between items-center bg-white/90 p-3 rounded-xl border border-amber-900/15 text-xs mono">
+                                <div>
+                                    <span class="font-bold text-amber-950">${c.client_name}</span>
+                                    <span class="text-[10px] text-slate-500 block">Prefix: ${c.key_prefix || 'VIP'} | ${c.type || 'Active'}</span>
+                                </div>
+                                <button onclick="revokeKey('${targetId}', '${c.client_name}')" class="px-2.5 py-1 bg-rose-500/10 hover:bg-rose-600 hover:text-white text-rose-700 font-bold text-[10px] rounded-lg border border-rose-500/20 transition-all">Revoke</button>
+                            </div>
+                        `;
+                    });
+                    listContainer.innerHTML = html;
+                }
+            } catch (err) {
+                listContainer.innerHTML = `<div class="text-center p-3 text-xs text-rose-600 mono">Failed to load active keys.</div>`;
+            }
+        }
+
+        // Target Specific Isolated Revoke Logic
+        async function revokeKey(targetId, clientName) {
+            if (!confirm(`क्या आप केवल ${clientName} की API Key को रद्द (Revoke) करना चाहते हैं?`)) return;
+
+            try {
+                const response = await fetch('/admin/keys/revoke', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Admin-Key': storedAdminKey
+                    },
+                    body: JSON.stringify({ key_id: targetId, client_name: clientName })
+                });
+
+                if (response.ok) {
+                    // Re-fetch only active keys to immediately reflect single key removal
+                    fetchActiveKeys();
+                } else {
+                    alert("की (Key) रद्द करने में विफल।");
+                }
+            } catch (err) {
+                alert("सर्वर से कनेक्ट करने में त्रुटि।");
+            }
+        }
+
+        async function unlockVault() {
+            const keyInput = document.getElementById('vault-key').value.trim();
+            if (!keyInput) return;
+
+            try {
+                const response = await fetch('/admin/keys/list', {
+                    headers: { 'X-Admin-Key': keyInput }
+                });
+
+                if (response.ok) {
+                    storedAdminKey = keyInput;
+                    document.getElementById('vault-login-box').classList.add('hidden');
+                    document.getElementById('unlocked-vault-box').classList.remove('hidden');
+                    fetchActiveKeys();
+                } else {
+                    alert("Invalid Master Admin Key.");
+                }
+            } catch (err) {
+                alert("Error connecting to server.");
+            }
+        }
+
+        function lockVault() {
+            storedAdminKey = "";
+            document.getElementById('vault-key').value = "";
+            document.getElementById('vault-login-box').classList.remove('hidden');
+            document.getElementById('unlocked-vault-box').classList.add('hidden');
+        }
+
+        // WebSocket Connection
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/telemetry`;
+            const wsStatus = document.getElementById('ws-status');
+            
+            try {
+                const ws = new WebSocket(wsUrl);
+                ws.onopen = () => {
+                    wsStatus.className = "text-emerald-800 bg-emerald-500/20 px-2.5 py-1 rounded-full border border-emerald-500/30 font-bold text-[11px] mono flex items-center gap-1.5 shadow-sm";
+                    wsStatus.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-600 animate-ping"></span> Live WS Active`;
+                };
+
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        updateTelemetryUI(data);
+                    } catch (e) {
+                        console.error("Telemetry parsing error:", e);
+                    }
+                };
+
+                ws.onclose = () => {
+                    wsStatus.className = "text-rose-800 bg-rose-500/20 px-2.5 py-1 rounded-full border border-rose-500/30 font-bold text-[11px] mono flex items-center gap-1.5 shadow-sm";
+                    wsStatus.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-600"></span> Disconnected`;
+                    setTimeout(connectWebSocket, 3000);
+                };
+            } catch (err) {
+                setTimeout(connectWebSocket, 3000);
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            connectWebSocket();
+        });
+    </script>
 </body>
 </html>
