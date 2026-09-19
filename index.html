@@ -496,7 +496,7 @@
             }
         }
 
-        /* --- VAULT API LOGIC --- */
+        /* --- VAULT API & PERMANENT FIXED COPY LOGIC --- */
         async function fetchActiveKeys() {
             if (!storedAdminKey) return;
             const listContainer = document.getElementById('active-keys-list');
@@ -505,54 +505,94 @@
                 if (response.ok) {
                     const data = await response.json();
                     
-                    if (data.total_available_ips !== undefined) {
-                        document.getElementById('ui-vault-total-ips').innerText = data.total_available_ips;
-                    }
-                    if (data.storage_capacity !== undefined) {
-                        document.getElementById('ui-storage-capacity').innerText = data.storage_capacity;
-                    }
-                    if (data.storage_used !== undefined) {
-                        document.getElementById('ui-storage-used').innerText = data.storage_used;
+                    if (data.total_active !== undefined) {
+                        document.getElementById('ui-vault-total-ips').innerText = data.total_active;
                     }
 
                     if (!data.active_clients || data.active_clients.length === 0) {
                         listContainer.innerHTML = `<div class="text-center p-3 text-xs text-slate-500 mono">No active client keys found.</div>`;
                         return;
                     }
+
                     let html = "";
                     data.active_clients.forEach(c => {
-                        const fullKeyText = c.full_key || c.key_id || "";
+                        const realKey = c.key_id || "";
+                        // सीधा तैयार curl कमांड बनाएँ ताकि एक क्लिक में सर्वर टेस्ट हो सके
+                        const curlCommand = `curl -H "X-API-Key: ${realKey}" http://${window.location.host}/proxy/connect`;
+
                         html += `
                             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white/95 p-3 rounded-xl border border-amber-900/15 text-xs mono gap-2">
                                 <div class="overflow-hidden">
                                     <span class="font-bold text-amber-950">${c.client_name}</span>
-                                    <span class="text-[10px] text-slate-500 block">Key: <code class="bg-amber-100 px-1 rounded">${c.key_prefix || 'VIP'}...</code> | ${c.type || 'Active'}</span>
+                                    <span class="text-[10px] text-slate-500 block">Key: <code class="bg-amber-100 px-1 rounded">${c.key_prefix || 'VIP'}</code> | Type: ${c.type || 'Permanent'}</span>
                                 </div>
                                 <div class="flex gap-2 w-full sm:w-auto justify-end">
-                                    <button onclick="copyKeyText('${fullKeyText}', this)" class="px-2.5 py-1 bg-blue-500/10 hover:bg-blue-600 hover:text-white text-blue-700 font-bold text-[10px] rounded-lg border border-blue-500/20 transition-all">📋 Copy</button>
+                                    <button onclick="copyKeyText('${curlCommand}', this)" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] rounded-lg transition-all shadow-sm">📋 Copy Curl</button>
                                     <button onclick="revokeKey('${c.key_id}', '${c.client_name}')" class="px-2.5 py-1 bg-rose-500/10 hover:bg-rose-600 hover:text-white text-rose-700 font-bold text-[10px] rounded-lg border border-rose-500/20 transition-all">Revoke</button>
                                 </div>
                             </div>`;
                     });
                     listContainer.innerHTML = html;
                 }
-            } catch (err) { listContainer.innerHTML = `<div class="text-center p-3 text-xs text-rose-600 mono">Failed to load active keys.</div>`; }
+            } catch (err) { 
+                listContainer.innerHTML = `<div class="text-center p-3 text-xs text-rose-600 mono">Failed to load active keys.</div>`; 
+            }
         }
 
+        /* --- UNIVERSAL HTTP/HTTPS CLIPBOARD COPY FALLBACK --- */
         function copyKeyText(text, btnElement) {
             if (!text) {
-                alert("Key string not available in local context.");
+                alert("Key string not available.");
                 return;
             }
-            navigator.clipboard.writeText(text).then(() => {
-                const originalText = btnElement.innerText;
-                btnElement.innerText = "✅ Copied!";
-                btnElement.classList.add("bg-emerald-600", "text-white");
-                setTimeout(() => {
-                    btnElement.innerText = originalText;
-                    btnElement.classList.remove("bg-emerald-600", "text-white");
-                }, 2000);
-            }).catch(err => { alert("Failed to copy key."); });
+
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(() => {
+                    triggerCopySuccess(btnElement);
+                }).catch(() => {
+                    executeUniversalFallback(text, btnElement);
+                });
+            } else {
+                executeUniversalFallback(text, btnElement);
+            }
+        }
+
+        function executeUniversalFallback(text, btnElement) {
+            const textArea = document.createElement("textarea");
+            textArea.value = text;
+            textArea.style.position = "fixed";
+            textArea.style.top = "0";
+            textArea.style.left = "0";
+            textArea.style.opacity = "0";
+            
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    triggerCopySuccess(btnElement);
+                } else {
+                    alert("Clipboard copy failed.");
+                }
+            } catch (err) {
+                alert("Error copying to clipboard.");
+            }
+
+            document.body.removeChild(textArea);
+        }
+
+        function triggerCopySuccess(btnElement) {
+            const originalText = btnElement.innerText;
+            btnElement.innerText = "✅ Copied Curl!";
+            btnElement.classList.remove("bg-blue-600", "hover:bg-blue-700");
+            btnElement.classList.add("bg-emerald-600", "text-white");
+            setTimeout(() => {
+                btnElement.innerText = originalText;
+                btnElement.classList.remove("bg-emerald-600", "text-white");
+                btnElement.classList.add("bg-blue-600", "hover:bg-blue-700");
+            }, 2000);
         }
 
         async function generateNewKey() {
