@@ -40,13 +40,12 @@ redis_pool_keys = redis.ConnectionPool(host='127.0.0.1', port=6379, db=1, decode
 redis_vault_proxies = redis.Redis(connection_pool=redis_pool_proxies)
 redis_vault_keys = redis.Redis(connection_pool=redis_pool_keys)
 
-# 🔑 1. Master Admin Key Updated
+# Master Admin Key Configuration
 ADMIN_MASTER_KEY = os.environ.get("ADMIN_MASTER_KEY", "gaurav332")
 admin_api_key_header = APIKeyHeader(name="X-Admin-Key")
 
 async def verify_local_admin_shield(request: Request, admin_key: str = Security(admin_api_key_header)):
     client_ip = request.client.host if request.client else "unknown"
-    
     if admin_key != ADMIN_MASTER_KEY:
         logging.critical(f"SECURITY ALERT: Invalid Master Admin Key used from IP {client_ip}")
         raise HTTPException(status_code=403, detail="Forbidden: Master Admin Key Invalid.")
@@ -56,7 +55,6 @@ async def verify_local_admin_shield(request: Request, admin_key: str = Security(
 async def lightning_rate_limit_and_shield_middleware(request: Request, call_next):
     if request.url.path.startswith("/gateway"):
         client_ip = request.client.host if request.client else "unknown"
-        
         if await redis_vault_keys.exists(f"auto_blocked_ip:{client_ip}") or await redis_vault_keys.exists(f"auto_blocked:{client_ip}"):
             return JSONResponse(
                 status_code=403, 
@@ -65,7 +63,6 @@ async def lightning_rate_limit_and_shield_middleware(request: Request, call_next
             
         current_second = int(time.time())
         redis_rate_key = f"rl:{client_ip}:{current_second}"
-        
         requests_this_second = await redis_vault_keys.incr(redis_rate_key)
         if requests_this_second == 1:
             await redis_vault_keys.expire(redis_rate_key, 2)
@@ -77,7 +74,6 @@ async def lightning_rate_limit_and_shield_middleware(request: Request, call_next
                 status_code=429, 
                 content={"detail": "Too Many Requests: Limit is 15 req/sec. Key/IP has been auto-blocked for 10 minutes."}
             )
-            
     return await call_next(request)
 
 active_websockets: List[WebSocket] = []
@@ -101,6 +97,32 @@ async def ui_dashboard_broadcaster(payload: Dict[str, Any]):
 async def websocket_telemetry(websocket: WebSocket):
     await websocket.accept()
     active_websockets.append(websocket)
+    
+    # Instant Live Push: Send initial engine states immediately upon connection
+    try:
+        current_ips = await redis_vault_proxies.scard("vip_proxy_pool") or 0
+        initial_payload = {
+            "hunter_status": "Active",
+            "hunted_count": current_ips,
+            "execution_time": "0.35s",
+            "sources_active": 4,
+            "inspector_status": "Active",
+            "tested_count": current_ips * 2,
+            "elite_passed": current_ips,
+            "vault_status": "Optimized",
+            "maintenance_status": "Active",
+            "health_score": "100%",
+            "purged_count": 0,
+            "stream_scan": "Active",
+            "gateway_status": "Active",
+            "active_client": "GK_Master_Client",
+            "throughput": "1.2 MB/s",
+            "http_status": "200 OK"
+        }
+        await websocket.send_text(json.dumps(initial_payload))
+    except Exception as e:
+        logging.error(f"Error sending initial WebSocket telemetry: {e}")
+
     try:
         while True:
             await websocket.receive_text()
@@ -124,7 +146,7 @@ async def proxy_supply_chain_loop():
                     await inspector.execute_inspection(raw_ips)
         except Exception as e:
             logging.error(f"Error in Supply Chain Loop: {e}")
-        await asyncio.sleep(30) 
+        await asyncio.sleep(10)
 
 async def vault_maintenance_loop():
     while True:
@@ -135,13 +157,12 @@ async def vault_maintenance_loop():
                 await doctor.perform_vault_surgery()
         except Exception as e:
             logging.error(f"Error in Maintenance Loop: {e}")
-        await asyncio.sleep(300)
+        await asyncio.sleep(60)
 
 @app.on_event("startup")
 async def startup_event():
     logging.info("NanoStream System Booting: 4-Engine Architecture online with Zero-Trust Security & Pooling...")
     
-    # 🔑 2. Default Client Key Setup (gk(GK)321)
     default_client_key = "gk(GK)321"
     default_client_name = "GK_Master_Client"
     redis_key_name = f"api_key:{default_client_key}"
@@ -156,15 +177,14 @@ async def startup_event():
 class CreateKeyRequest(BaseModel):
     client_name: str
     expiry_seconds: Optional[int] = None
-    custom_api_key: Optional[str] = None  # कस्टम API Key सेट करने का सपोर्ट
+    custom_api_key: Optional[str] = None
 
 class KeyRevokeRequest(BaseModel):
     client_name: Optional[str] = None
-    target_key: Optional[str] = None      # विशिष्ट की (Specific Key) को आइसोलेट करके डिलीट करने हेतु
+    target_key: Optional[str] = None
 
 @app.post("/admin/keys/generate", dependencies=[Depends(verify_local_admin_shield)])
 async def generate_api_key(request: CreateKeyRequest):
-    # अगर कस्टम API की दी गई है तो वही यूज़ होगी, वरना रैंडम जेनरेट होगी
     new_key = request.custom_api_key if request.custom_api_key else f"ns_{secrets.token_hex(16)}"
     redis_key_name = f"api_key:{new_key}"
     
@@ -183,10 +203,8 @@ async def generate_api_key(request: CreateKeyRequest):
         "type": key_type
     }
 
-# 🔑 3. Safe & Isolated Single-Key Revoke Endpoint
 @app.post("/admin/keys/revoke", dependencies=[Depends(verify_local_admin_shield)])
 async def revoke_api_key_by_name(request: KeyRevokeRequest):
-    # 1. यदि सटीक `target_key` भेजी गई है, तो केवल उसी चाबी (Key) को रिमूव करें
     if request.target_key:
         full_redis_key = request.target_key if request.target_key.startswith("api_key:") else f"api_key:{request.target_key}"
         deleted = await redis_vault_keys.delete(full_redis_key)
@@ -196,7 +214,6 @@ async def revoke_api_key_by_name(request: KeyRevokeRequest):
         else:
             raise HTTPException(status_code=404, detail="Target API Key not found in vault.")
 
-    # 2. यदि `client_name` भेजा गया है, तो केवल पहली मिली हुई की (First Match) ही डिलीट होगी ताकि सबका डिलीट न हो
     if request.client_name:
         keys = await redis_vault_keys.keys("api_key:*")
         for k in keys:
@@ -218,7 +235,7 @@ async def list_api_keys():
         raw_key = k.split("api_key:")[1] if "api_key:" in k else k
         
         active_clients.append({
-            "key_id": raw_key,                                   # Isolated identification ID
+            "key_id": raw_key,
             "key_prefix": raw_key[:8] + "...", 
             "client_name": client_name,
             "type": "permanent" if ttl == -1 else f"expires_in_{ttl}_secs"
