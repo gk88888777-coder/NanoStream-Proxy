@@ -46,16 +46,15 @@ class ProxyInspector:
         # OS Protection: Max 150 concurrent requests to prevent Linux socket exhaustion (Errno 24)
         self.semaphore = asyncio.Semaphore(150)
 
-    async def _emit_telemetry(self, status: str, tested: int, passed: int, execution_time: float = 0.0):
-        """Safely broadcasts real-time inspection metrics to the WebSocket UI dashboard."""
+    async def _emit_telemetry(self, status: str, tested: int, passed: int):
+        """Safely broadcasts real-time inspection metrics directly matching dashboard fields."""
         if self.ui_broadcast:
             try:
                 payload = {
-                    "engine": "master_2_inspector",
-                    "status": status,
-                    "ips_tested": tested,
-                    "ips_passed": passed,
-                    "execution_time_sec": round(execution_time, 2)
+                    "inspector_status": "Active" if status != "error" else "Error",
+                    "tested_count": tested,
+                    "elite_passed": passed,
+                    "vault_status": "Optimized"
                 }
                 if asyncio.iscoroutinefunction(self.ui_broadcast):
                     await self.ui_broadcast(payload)
@@ -124,7 +123,7 @@ class ProxyInspector:
         start_time = time.time()
         
         # Live Telemetry: Inspection started broadcast to UI dashboard
-        await self._emit_telemetry(status="inspection_started", tested=total_raw, passed=0)
+        await self._emit_telemetry(status="running", tested=total_raw, passed=0)
 
         # High-concurrency asynchronous task execution bound by semaphore
         tasks = [self._test_single_proxy(ip) for ip in raw_ips_list]
@@ -149,8 +148,7 @@ class ProxyInspector:
         
         # Live Telemetry: Inspection completed broadcast to UI with final metrics
         await self._emit_telemetry(
-            status="inspection_completed", 
+            status="completed", 
             tested=total_raw, 
-            passed=total_elite, 
-            execution_time=execution_time
+            passed=total_elite
         )
