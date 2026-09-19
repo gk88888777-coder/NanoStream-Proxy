@@ -40,13 +40,13 @@ redis_pool_keys = redis.ConnectionPool(host='127.0.0.1', port=6379, db=1, decode
 redis_vault_proxies = redis.Redis(connection_pool=redis_pool_proxies)
 redis_vault_keys = redis.Redis(connection_pool=redis_pool_keys)
 
-ADMIN_MASTER_KEY = os.environ.get("ADMIN_MASTER_KEY", "nano_admin_777_secure")
+# 🔑 1. Master Admin Key Updated
+ADMIN_MASTER_KEY = os.environ.get("ADMIN_MASTER_KEY", "gaurav332")
 admin_api_key_header = APIKeyHeader(name="X-Admin-Key")
 
 async def verify_local_admin_shield(request: Request, admin_key: str = Security(admin_api_key_header)):
     client_ip = request.client.host if request.client else "unknown"
     
-    # लोकल आईपी की पाबंदी हटा दी गई है ताकि किसी भी डिवाइस से मास्टर की के साथ एक्सेस किया जा सके
     if admin_key != ADMIN_MASTER_KEY:
         logging.critical(f"SECURITY ALERT: Invalid Master Admin Key used from IP {client_ip}")
         raise HTTPException(status_code=403, detail="Forbidden: Master Admin Key Invalid.")
@@ -140,19 +140,32 @@ async def vault_maintenance_loop():
 @app.on_event("startup")
 async def startup_event():
     logging.info("NanoStream System Booting: 4-Engine Architecture online with Zero-Trust Security & Pooling...")
+    
+    # 🔑 2. Default Client Key Setup (gk(GK)321)
+    default_client_key = "gk(GK)321"
+    default_client_name = "GK_Master_Client"
+    redis_key_name = f"api_key:{default_client_key}"
+    
+    if not await redis_vault_keys.exists(redis_key_name):
+        await redis_vault_keys.set(redis_key_name, default_client_name)
+        logging.info(f"DEFAULT CLIENT KEY INITIALIZED: {default_client_key} ({default_client_name})")
+
     asyncio.create_task(proxy_supply_chain_loop())
     asyncio.create_task(vault_maintenance_loop())
 
 class CreateKeyRequest(BaseModel):
     client_name: str
     expiry_seconds: Optional[int] = None
+    custom_api_key: Optional[str] = None  # कस्टम API Key सेट करने का सपोर्ट
 
 class KeyRevokeRequest(BaseModel):
-    client_name: str
+    client_name: Optional[str] = None
+    target_key: Optional[str] = None      # विशिष्ट की (Specific Key) को आइसोलेट करके डिलीट करने हेतु
 
 @app.post("/admin/keys/generate", dependencies=[Depends(verify_local_admin_shield)])
 async def generate_api_key(request: CreateKeyRequest):
-    new_key = f"ns_{secrets.token_hex(16)}"
+    # अगर कस्टम API की दी गई है तो वही यूज़ होगी, वरना रैंडम जेनरेट होगी
+    new_key = request.custom_api_key if request.custom_api_key else f"ns_{secrets.token_hex(16)}"
     redis_key_name = f"api_key:{new_key}"
     
     if request.expiry_seconds and request.expiry_seconds > 0:
@@ -170,21 +183,30 @@ async def generate_api_key(request: CreateKeyRequest):
         "type": key_type
     }
 
+# 🔑 3. Safe & Isolated Single-Key Revoke Endpoint
 @app.post("/admin/keys/revoke", dependencies=[Depends(verify_local_admin_shield)])
 async def revoke_api_key_by_name(request: KeyRevokeRequest):
-    keys = await redis_vault_keys.keys("api_key:*")
-    revoked_count = 0
-    for k in keys:
-        client_name = await redis_vault_keys.get(k)
-        if client_name == request.client_name:
-            await redis_vault_keys.delete(k)
-            revoked_count += 1
-            
-    if revoked_count == 0:
-        raise HTTPException(status_code=404, detail="Client not found in active vault.")
-        
-    logging.info(f"ADMIN ACTION -> Revoked API key for client: {request.client_name}")
-    return {"status": "success", "message": f"Revoked access for {request.client_name}"}
+    # 1. यदि सटीक `target_key` भेजी गई है, तो केवल उसी चाबी (Key) को रिमूव करें
+    if request.target_key:
+        full_redis_key = request.target_key if request.target_key.startswith("api_key:") else f"api_key:{request.target_key}"
+        deleted = await redis_vault_keys.delete(full_redis_key)
+        if deleted:
+            logging.info(f"ADMIN ACTION -> Revoked specific key: {request.target_key}")
+            return {"status": "success", "message": f"Revoked single key: {request.target_key}"}
+        else:
+            raise HTTPException(status_code=404, detail="Target API Key not found in vault.")
+
+    # 2. यदि `client_name` भेजा गया है, तो केवल पहली मिली हुई की (First Match) ही डिलीट होगी ताकि सबका डिलीट न हो
+    if request.client_name:
+        keys = await redis_vault_keys.keys("api_key:*")
+        for k in keys:
+            client_name = await redis_vault_keys.get(k)
+            if client_name == request.client_name:
+                await redis_vault_keys.delete(k)
+                logging.info(f"ADMIN ACTION -> Revoked single key for client: {request.client_name}")
+                return {"status": "success", "message": f"Revoked access for {request.client_name}"}
+
+    raise HTTPException(status_code=400, detail="Must provide either target_key or client_name to revoke.")
 
 @app.get("/admin/keys/list", dependencies=[Depends(verify_local_admin_shield)])
 async def list_api_keys():
@@ -193,8 +215,11 @@ async def list_api_keys():
     for k in keys:
         client_name = await redis_vault_keys.get(k)
         ttl = await redis_vault_keys.ttl(k)
+        raw_key = k.split("api_key:")[1] if "api_key:" in k else k
+        
         active_clients.append({
-            "key_prefix": k.split(":")[1][:8] + "...", 
+            "key_id": raw_key,                                   # Isolated identification ID
+            "key_prefix": raw_key[:8] + "...", 
             "client_name": client_name,
             "type": "permanent" if ttl == -1 else f"expires_in_{ttl}_secs"
         })
