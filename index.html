@@ -42,7 +42,7 @@
 </head>
 <body class="p-4 md:p-8 flex flex-col justify-between selection:bg-amber-600 selection:text-white">
 
-    <!-- 🔒 1. INITIAL SYSTEM LOCK POPUP (लिंक खोलते ही यह पॉप-अप दिखेगा) -->
+    <!-- 🔒 1. INITIAL SYSTEM LOCK POPUP -->
     <div id="system-lock-overlay" class="fixed inset-0 bg-slate-950/80 backdrop-blur-xl z-50 flex items-center justify-center p-4">
         <div class="glass-panel p-8 rounded-3xl max-w-md w-full text-center space-y-5 shadow-2xl border border-amber-900/40">
             <div class="w-16 h-16 rounded-2xl bg-amber-800/10 border border-amber-800/30 flex items-center justify-center mx-auto text-amber-950 font-bold text-2xl animate-pulse">
@@ -50,10 +50,10 @@
             </div>
             <div>
                 <h2 class="text-base mono text-amber-950 font-extrabold uppercase tracking-wider">Executive Command Security</h2>
-                <p class="text-xs text-amber-900/80 mt-1 mono">Enter Master Admin Key to Access System</p>
+                <p class="text-xs text-amber-900/80 mt-1 mono">Enter Admin Password to Access System</p>
             </div>
             <div class="space-y-3">
-                <input type="password" id="master-auth-key" placeholder="Enter Admin Key (e.g. gaurav332)" 
+                <input type="password" id="master-auth-key" autocomplete="new-password" placeholder="Enter Admin Password" 
                     onkeydown="if(event.key==='Enter') authenticateSystem()"
                     class="w-full bg-white/90 border border-amber-900/30 rounded-xl px-4 py-3 text-xs mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-800/50 text-center font-bold">
                 <button onclick="authenticateSystem()" 
@@ -61,11 +61,11 @@
                     Unlock Control Room 🔓
                 </button>
             </div>
-            <p id="auth-error-msg" class="text-[11px] text-rose-700 font-bold mono hidden">❌ Invalid Master Admin Key!</p>
+            <p id="auth-error-msg" class="text-[11px] text-rose-700 font-bold mono hidden">❌ Invalid Admin Password!</p>
         </div>
     </div>
 
-    <!-- 2. MAIN APP LAYOUT (सही Key डालने से पहले पूरी तरह छुपा रहेगा) -->
+    <!-- 2. MAIN APP LAYOUT -->
     <div id="main-layout" class="max-w-4xl mx-auto w-full space-y-6 hidden">
         
         <!-- Header -->
@@ -85,6 +85,30 @@
 
         <!-- Command Center Screen -->
         <section id="screen-command" class="space-y-4">
+            
+            <!-- 📦 Production-Ready Vault Storage & Redis 128 GB Capacity Widgets -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div class="glass-panel p-4 rounded-2xl flex items-center justify-between shadow-sm border border-amber-900/20">
+                    <div>
+                        <span class="text-[10px] mono text-amber-900/80 font-extrabold uppercase tracking-wider">Vault Storage IPs</span>
+                        <h3 class="text-xs mono text-amber-950 font-extrabold mt-0.5">
+                            Ready IPs: <span id="ui-vault-total-ips" class="text-emerald-700 bg-emerald-500/10 px-2 py-0.5 rounded text-sm font-black">--</span>
+                        </h3>
+                    </div>
+                    <div class="w-9 h-9 rounded-xl bg-amber-900/10 flex items-center justify-center text-amber-950 font-bold">📦</div>
+                </div>
+                <div class="glass-panel p-4 rounded-2xl flex items-center justify-between shadow-sm border border-amber-900/20">
+                    <div>
+                        <span class="text-[10px] mono text-amber-900/80 font-extrabold uppercase tracking-wider">Redis Storage Capacity</span>
+                        <h3 class="text-xs mono text-amber-950 font-extrabold mt-0.5">
+                            Size: <span id="ui-storage-capacity" class="text-blue-700 bg-blue-500/10 px-2 py-0.5 rounded text-sm font-black">128 GB</span> 
+                            <span class="text-[10px] text-slate-600 ml-1">(Used: <span id="ui-storage-used" class="text-emerald-700 font-bold">--</span>)</span>
+                        </h3>
+                    </div>
+                    <div class="w-9 h-9 rounded-xl bg-blue-600/10 flex items-center justify-center text-blue-700 font-bold">⚡</div>
+                </div>
+            </div>
+
             <div class="flex justify-between items-center px-1">
                 <span class="text-xs mono font-bold text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
                     <span>⚡</span> 4X Engine Clusters (Live Status)
@@ -158,33 +182,48 @@
 
         <!-- Vault & Admin Screen -->
         <section id="screen-vault" class="space-y-4 hidden">
-            <div class="glass-panel p-6 rounded-3xl shadow-xl">
+            <div class="glass-panel p-4 md:p-6 rounded-3xl shadow-xl w-full overflow-hidden">
                 <div class="flex justify-between items-center border-b border-amber-900/20 pb-3 mb-4">
                     <h4 class="text-sm mono text-amber-950 font-extrabold uppercase">🔑 Key Control Center</h4>
                     <button onclick="lockSystem()" class="text-[11px] bg-rose-600/10 text-rose-700 px-3 py-1.5 rounded-lg border border-rose-600/20 font-bold">Lock Control Room 🔒</button>
                 </div>
                 
                 <!-- Generate Key Form -->
-                <div class="bg-amber-900/5 p-4 rounded-xl border border-amber-900/10 mb-4 flex gap-2">
-                    <input type="text" id="new-client-name" placeholder="Client Name" class="flex-1 bg-white border border-amber-900/20 rounded-lg px-3 py-2 text-xs mono focus:outline-none">
-                    <input type="text" id="new-custom-key" placeholder="Custom Key (Optional)" class="flex-1 bg-white border border-amber-900/20 rounded-lg px-3 py-2 text-xs mono focus:outline-none">
-                    <button onclick="generateNewKey()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs mono rounded-lg transition-all shadow-md">Generate</button>
+                <div class="bg-amber-900/5 p-4 rounded-xl border border-amber-900/10 mb-4 flex flex-col gap-3 w-full">
+                    <div class="flex flex-col sm:flex-row gap-2 w-full">
+                        <input type="text" id="new-client-name" placeholder="Client Name" class="w-full sm:flex-1 bg-white border border-amber-900/20 rounded-lg px-3 py-2 text-xs mono focus:outline-none">
+                        <input type="text" id="new-custom-key" placeholder="Custom Key (Optional)" class="w-full sm:flex-1 bg-white border border-amber-900/20 rounded-lg px-3 py-2 text-xs mono focus:outline-none">
+                    </div>
+                    
+                    <!-- Expiry Date, Time & Lifetime Selection -->
+                    <div class="flex flex-col sm:flex-row gap-2 items-center w-full pt-1 border-t border-amber-900/10">
+                        <div class="flex items-center gap-1.5 w-full sm:w-auto">
+                            <span class="text-[11px] mono text-amber-950 font-bold whitespace-nowrap">📅 Expiry:</span>
+                            <input type="datetime-local" id="new-expiry-date" class="w-full sm:w-auto bg-white border border-amber-900/20 rounded-lg px-2 py-1.5 text-xs mono focus:outline-none">
+                        </div>
+                        <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
+                            <label class="flex items-center gap-1 cursor-pointer text-[11px] mono font-bold text-amber-950">
+                                <input type="checkbox" id="is-lifetime-key" onchange="toggleExpiryInput()" class="rounded border-amber-900/30"> Lifetime / Permanent
+                            </label>
+                            <button onclick="generateNewKey()" class="w-full sm:w-auto px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs mono rounded-lg transition-all shadow-md">Generate Key</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Active Keys List -->
-                <div id="active-keys-list" class="space-y-2.5 max-h-52 overflow-y-auto"></div>
+                <div id="active-keys-list" class="space-y-2.5 max-h-56 overflow-y-auto w-full"></div>
             </div>
         </section>
     </div>
 
-    <!-- Engine Diagnostics Modal -->
+    <!-- Comprehensive Engine Telemetry Modal with Stored Vault Data -->
     <div id="modal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-md hidden flex items-center justify-center p-4 z-50">
         <div class="glass-panel w-full max-w-lg rounded-3xl border border-amber-900/40 shadow-2xl flex flex-col overflow-hidden">
             <div class="flex justify-between items-center px-5 py-4 bg-amber-900/15 border-b border-amber-900/25 text-xs mono">
                 <span id="m-title" class="font-bold text-amber-950 text-base">Engine Diagnostics</span>
                 <button onclick="closeModal()" class="w-8 h-8 rounded-xl bg-amber-900/20 text-amber-950 font-bold flex items-center justify-center text-base">&times;</button>
             </div>
-            <div id="modal-body" class="p-6 space-y-3 text-xs mono text-slate-900"></div>
+            <div id="modal-body" class="p-6 space-y-4 text-xs mono text-slate-900 max-h-[70vh] overflow-y-auto"></div>
         </div>
     </div>
 
@@ -197,7 +236,8 @@
             active_client: "--", vault_status: "--", hunter_status: "Deactivated",
             inspector_status: "Deactivated", maintenance_status: "Deactivated", 
             gateway_status: "Deactivated", sources_active: "--", stream_scan: "Deactivated", 
-            http_status: "--" 
+            http_status: "--", stored_proxies: [], vault_total_ips: "--",
+            storage_capacity: "128 GB", storage_used: "--"
         };
 
         let activeModalEngine = null;
@@ -211,7 +251,6 @@
             if (!inputKey) return;
 
             try {
-                // Verify with main.py admin endpoint
                 const response = await fetch('/admin/keys/list', { 
                     headers: { 'X-Admin-Key': inputKey } 
                 });
@@ -219,15 +258,13 @@
                 if (response.ok) {
                     storedAdminKey = inputKey;
                     
-                    // Hide lock popup & reveal main layout
                     document.getElementById('system-lock-overlay').classList.add('hidden');
                     document.getElementById('main-layout').classList.remove('hidden');
                     
-                    // Connect WebSocket and fetch keys
                     connectWebSocket();
                     fetchActiveKeys();
                 } else {
-                    errorMsg.innerText = "❌ Access Denied: Invalid Admin Key!";
+                    errorMsg.innerText = "❌ Access Denied: Invalid Admin Password!";
                     errorMsg.classList.remove('hidden');
                 }
             } catch (err) {
@@ -243,7 +280,34 @@
             document.getElementById('main-layout').classList.add('hidden');
         }
 
-        /* --- UI & MODAL UTILITIES --- */
+        /* --- UI & SCREEN SWITCHING --- */
+        function switchScreen(screen) {
+            const btnCmd = document.getElementById('btn-cmd');
+            const btnVault = document.getElementById('btn-vault');
+
+            if (screen === 'command') {
+                document.getElementById('screen-command').classList.remove('hidden');
+                document.getElementById('screen-vault').classList.add('hidden');
+                
+                btnCmd.className = "px-4 py-2 rounded-lg text-xs mono font-bold bg-blue-600 text-white shadow-md transition-all";
+                btnVault.className = "px-4 py-2 rounded-lg text-xs mono font-bold text-amber-950 hover:bg-amber-950/10 transition-all";
+            } else {
+                document.getElementById('screen-command').classList.add('hidden');
+                document.getElementById('screen-vault').classList.remove('hidden');
+                
+                btnVault.className = "px-4 py-2 rounded-lg text-xs mono font-bold bg-blue-600 text-white shadow-md transition-all";
+                btnCmd.className = "px-4 py-2 rounded-lg text-xs mono font-bold text-amber-950 hover:bg-amber-950/10 transition-all";
+            }
+        }
+
+        function toggleExpiryInput() {
+            const isLifetime = document.getElementById('is-lifetime-key').checked;
+            const expiryInput = document.getElementById('new-expiry-date');
+            expiryInput.disabled = isLifetime;
+            if (isLifetime) expiryInput.value = "";
+        }
+
+        /* --- UTILITIES & MODAL HANDLING WITH DETAILED STORED DATA --- */
         function formatSourcesText(sources) {
             if (sources === undefined || sources === null || sources === "--") return "--";
             if (Array.isArray(sources)) return `${sources.length} Endpoints`;
@@ -272,29 +336,51 @@
 
         function getEngineModalData(engineKey) {
             const data = liveTelemetryStore;
+            let storedProxiesHtml = `<div class="text-slate-500 text-center py-2">No active stored proxy records in this vault stage.</div>`;
+            
+            if (data.stored_proxies && data.stored_proxies.length > 0) {
+                storedProxiesHtml = `<div class="space-y-1.5 max-h-40 overflow-y-auto pr-1">`;
+                data.stored_proxies.forEach(p => {
+                    storedProxiesHtml += `
+                        <div class="flex justify-between items-center bg-white/90 p-2 rounded-lg border border-amber-900/10">
+                            <span class="font-bold text-slate-900">${p.ip || p.address || 'IP'}:${p.port || 'Port'}</span>
+                            <span class="text-[10px] text-emerald-700 font-bold bg-emerald-500/10 px-2 py-0.5 rounded">${p.status || 'Active'}</span>
+                        </div>`;
+                });
+                storedProxiesHtml += `</div>`;
+            }
+
             if (engineKey === 'alpha') {
                 const st = getStatusBadge(data.hunter_status);
                 return {
-                    title: "Engine 1: Proxy Hunter Telemetry",
+                    title: "Engine 1: Proxy Hunter Telemetry & Stored Data",
                     body: `
                         <div class="space-y-3">
                             <div class="flex justify-between border-b pb-2"><span>Engine Status:</span> <span class="${st.class.split(' ')[1]}">${st.text}</span></div>
-                            <div class="flex justify-between border-b pb-2"><span>Raw IPs Found:</span> <span class="font-bold text-slate-900">${data.hunted_count}</span></div>
+                            <div class="flex justify-between border-b pb-2"><span>Raw IPs Scraped/Found:</span> <span class="font-bold text-blue-700">${data.hunted_count}</span></div>
                             <div class="flex justify-between border-b pb-2"><span>Execution Time:</span> <span class="text-slate-900">${data.execution_time}</span></div>
                             <div class="flex justify-between border-b pb-2"><span>Active Sources:</span> <span class="font-bold text-emerald-700">${formatSourcesText(data.sources_active)}</span></div>
+                            <div class="pt-2">
+                                <span class="font-extrabold text-amber-950 block mb-1">📦 Stored Raw IPs / Scraped Records:</span>
+                                ${storedProxiesHtml}
+                            </div>
                         </div>`
                 };
             }
             else if (engineKey === 'beta') {
                 const st = getStatusBadge(data.inspector_status);
                 return {
-                    title: "Engine 2: Proxy Inspector Telemetry",
+                    title: "Engine 2: Proxy Inspector Telemetry & Stored Data",
                     body: `
                         <div class="space-y-3">
                             <div class="flex justify-between border-b pb-2"><span>Engine Status:</span> <span class="${st.class.split(' ')[1]}">${st.text}</span></div>
                             <div class="flex justify-between border-b pb-2"><span>IPs Tested:</span> <span class="font-bold text-slate-900">${data.tested_count}</span></div>
                             <div class="flex justify-between border-b pb-2"><span>Elite Passed:</span> <span class="font-bold text-purple-700">${data.elite_passed}</span></div>
                             <div class="flex justify-between border-b pb-2"><span>Execution Speed:</span> <span class="text-slate-900">${data.execution_speed}</span></div>
+                            <div class="pt-2">
+                                <span class="font-extrabold text-amber-950 block mb-1">📦 Inspected & Elite Stored Vault Records:</span>
+                                ${storedProxiesHtml}
+                            </div>
                         </div>`
                 };
             }
@@ -302,26 +388,34 @@
                 const st = getStatusBadge(data.maintenance_status);
                 const streamSt = getStatusBadge(data.stream_scan);
                 return {
-                    title: "Engine 3: Vault Doctor Telemetry",
+                    title: "Engine 3: Vault Doctor Telemetry & Purge Stats",
                     body: `
                         <div class="space-y-3">
                             <div class="flex justify-between border-b pb-2"><span>Maintenance Status:</span> <span class="${st.class.split(' ')[1]}">${st.text}</span></div>
                             <div class="flex justify-between border-b pb-2"><span>Health Score:</span> <span class="font-bold text-emerald-700">${data.health_score}</span></div>
-                            <div class="flex justify-between border-b pb-2"><span>Purged Dead IPs:</span> <span class="font-bold text-rose-700">${data.purged_count}</span></div>
+                            <div class="flex justify-between border-b pb-2"><span>Purged / Blocked Dead IPs:</span> <span class="font-bold text-rose-700">${data.purged_count}</span></div>
                             <div class="flex justify-between border-b pb-2"><span>Stream Scan:</span> <span class="${streamSt.class.split(' ')[1]}">${streamSt.text}</span></div>
+                            <div class="pt-2">
+                                <span class="font-extrabold text-amber-950 block mb-1">📦 Cleaned Vault Storage State:</span>
+                                ${storedProxiesHtml}
+                            </div>
                         </div>`
                 };
             }
             else if (engineKey === 'delta') {
                 const st = getStatusBadge(data.gateway_status);
                 return {
-                    title: "Engine 4: Ultra-Gateway Telemetry",
+                    title: "Engine 4: Ultra-Gateway Telemetry & Live Intake",
                     body: `
                         <div class="space-y-3">
                             <div class="flex justify-between border-b pb-2"><span>Gateway Status:</span> <span class="${st.class.split(' ')[1]}">${st.text}</span></div>
                             <div class="flex justify-between border-b pb-2"><span>Active Client:</span> <span class="font-bold text-slate-900">${data.active_client}</span></div>
-                            <div class="flex justify-between border-b pb-2"><span>Throughput:</span> <span class="font-bold text-pink-700">${data.throughput}</span></div>
+                            <div class="flex justify-between border-b pb-2"><span>Live Throughput / Traffic Taken:</span> <span class="font-bold text-pink-700">${data.throughput}</span></div>
                             <div class="flex justify-between border-b pb-2"><span>HTTP Status:</span> ${formatHttpStatus(data.http_status)}</div>
+                            <div class="pt-2">
+                                <span class="font-extrabold text-amber-950 block mb-1">📦 Gateway Active Stream Records:</span>
+                                ${storedProxiesHtml}
+                            </div>
                         </div>`
                 };
             }
@@ -343,6 +437,19 @@
 
         function updateTelemetryUI(data) {
             Object.assign(liveTelemetryStore, data);
+
+            if (data.vault_total_ips !== undefined) {
+                document.getElementById('ui-vault-total-ips').innerText = data.vault_total_ips;
+            } else if (data.elite_passed !== undefined) {
+                document.getElementById('ui-vault-total-ips').innerText = data.elite_passed;
+            }
+
+            if (data.storage_capacity !== undefined) {
+                document.getElementById('ui-storage-capacity').innerText = data.storage_capacity;
+            }
+            if (data.storage_used !== undefined) {
+                document.getElementById('ui-storage-used').innerText = data.storage_used;
+            }
 
             if (data.hunted_count !== undefined) document.getElementById('ui-eng1-ips').innerText = data.hunted_count;
             if (data.execution_time !== undefined) document.getElementById('ui-eng1-time').innerText = data.execution_time;
@@ -389,16 +496,6 @@
             }
         }
 
-        function switchScreen(screen) {
-            if (screen === 'command') {
-                document.getElementById('screen-command').classList.remove('hidden');
-                document.getElementById('screen-vault').classList.add('hidden');
-            } else {
-                document.getElementById('screen-command').classList.add('hidden');
-                document.getElementById('screen-vault').classList.remove('hidden');
-            }
-        }
-
         /* --- VAULT API LOGIC --- */
         async function fetchActiveKeys() {
             if (!storedAdminKey) return;
@@ -407,19 +504,34 @@
                 const response = await fetch('/admin/keys/list', { headers: { 'X-Admin-Key': storedAdminKey } });
                 if (response.ok) {
                     const data = await response.json();
+                    
+                    if (data.total_available_ips !== undefined) {
+                        document.getElementById('ui-vault-total-ips').innerText = data.total_available_ips;
+                    }
+                    if (data.storage_capacity !== undefined) {
+                        document.getElementById('ui-storage-capacity').innerText = data.storage_capacity;
+                    }
+                    if (data.storage_used !== undefined) {
+                        document.getElementById('ui-storage-used').innerText = data.storage_used;
+                    }
+
                     if (!data.active_clients || data.active_clients.length === 0) {
                         listContainer.innerHTML = `<div class="text-center p-3 text-xs text-slate-500 mono">No active client keys found.</div>`;
                         return;
                     }
                     let html = "";
                     data.active_clients.forEach(c => {
+                        const fullKeyText = c.full_key || c.key_id || "";
                         html += `
-                            <div class="flex justify-between items-center bg-white/90 p-3 rounded-xl border border-amber-900/15 text-xs mono">
-                                <div>
+                            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white/95 p-3 rounded-xl border border-amber-900/15 text-xs mono gap-2">
+                                <div class="overflow-hidden">
                                     <span class="font-bold text-amber-950">${c.client_name}</span>
-                                    <span class="text-[10px] text-slate-500 block">Prefix: ${c.key_prefix || 'VIP'} | ${c.type || 'Active'}</span>
+                                    <span class="text-[10px] text-slate-500 block">Key: <code class="bg-amber-100 px-1 rounded">${c.key_prefix || 'VIP'}...</code> | ${c.type || 'Active'}</span>
                                 </div>
-                                <button onclick="revokeKey('${c.key_id}', '${c.client_name}')" class="px-2.5 py-1 bg-rose-500/10 hover:bg-rose-600 hover:text-white text-rose-700 font-bold text-[10px] rounded-lg border border-rose-500/20 transition-all">Revoke</button>
+                                <div class="flex gap-2 w-full sm:w-auto justify-end">
+                                    <button onclick="copyKeyText('${fullKeyText}', this)" class="px-2.5 py-1 bg-blue-500/10 hover:bg-blue-600 hover:text-white text-blue-700 font-bold text-[10px] rounded-lg border border-blue-500/20 transition-all">📋 Copy</button>
+                                    <button onclick="revokeKey('${c.key_id}', '${c.client_name}')" class="px-2.5 py-1 bg-rose-500/10 hover:bg-rose-600 hover:text-white text-rose-700 font-bold text-[10px] rounded-lg border border-rose-500/20 transition-all">Revoke</button>
+                                </div>
                             </div>`;
                     });
                     listContainer.innerHTML = html;
@@ -427,14 +539,38 @@
             } catch (err) { listContainer.innerHTML = `<div class="text-center p-3 text-xs text-rose-600 mono">Failed to load active keys.</div>`; }
         }
 
+        function copyKeyText(text, btnElement) {
+            if (!text) {
+                alert("Key string not available in local context.");
+                return;
+            }
+            navigator.clipboard.writeText(text).then(() => {
+                const originalText = btnElement.innerText;
+                btnElement.innerText = "✅ Copied!";
+                btnElement.classList.add("bg-emerald-600", "text-white");
+                setTimeout(() => {
+                    btnElement.innerText = originalText;
+                    btnElement.classList.remove("bg-emerald-600", "text-white");
+                }, 2000);
+            }).catch(err => { alert("Failed to copy key."); });
+        }
+
         async function generateNewKey() {
             const clientName = document.getElementById('new-client-name').value.trim();
             const customKey = document.getElementById('new-custom-key').value.trim();
+            const isLifetime = document.getElementById('is-lifetime-key').checked;
+            const expiryDate = document.getElementById('new-expiry-date').value;
+
             if (!clientName) return alert("Please enter a Client Name.");
 
             try {
                 const payload = { client_name: clientName };
                 if (customKey) payload.custom_api_key = customKey;
+                if (isLifetime) {
+                    payload.duration_type = "lifetime";
+                } else if (expiryDate) {
+                    payload.expiry = expiryDate;
+                }
 
                 const response = await fetch('/admin/keys/generate', {
                     method: 'POST',
@@ -444,6 +580,9 @@
                 if (response.ok) {
                     document.getElementById('new-client-name').value = "";
                     document.getElementById('new-custom-key').value = "";
+                    document.getElementById('new-expiry-date').value = "";
+                    document.getElementById('is-lifetime-key').checked = false;
+                    toggleExpiryInput();
                     fetchActiveKeys();
                 } else { alert("Failed to generate key."); }
             } catch (err) { alert("Error connecting to server."); }
