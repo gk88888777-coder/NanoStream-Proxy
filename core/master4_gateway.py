@@ -19,16 +19,14 @@ def enforce_security_guard():
 
 enforce_security_guard()
 
-# Professional logging setup for Engine 4 Gateway
 logging.basicConfig(
     level=logging.INFO, 
     format='%(asctime)s - [ENGINE-4: GATEWAY-CORE] - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
-app = FastAPI(title="NanoStream 4X Gateway Core", version="6.0.0")
+app = FastAPI(title="NanoStream 4X Gateway Core", version="6.1.0")
 
-# --- CORS MIDDLEWARE ---
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -37,7 +35,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Enterprise-grade fixed encryption key synchronized across engines
 DEFAULT_FIXED_KEY = "W3z9Lp7m1n4b6v8c0x3z5l7j9h1g3f5d7s9a2p4q6w8="
 ENCRYPTION_KEY = os.environ.get("PROXY_ENCRYPTION_KEY", DEFAULT_FIXED_KEY)
 try:
@@ -46,7 +43,6 @@ except Exception as e:
     logging.critical(f"FATAL: Invalid PROXY_ENCRYPTION_KEY configuration: {e}")
     sys.exit(1)
 
-# Environment-driven secure Redis configuration (Matches main.py DB 0 & DB 1)
 REDIS_HOST = os.environ.get("REDIS_HOST", "127.0.0.1")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
 REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD", None)
@@ -61,9 +57,7 @@ redis_pool_keys = redis.ConnectionPool(
 redis_vault_proxies = redis.Redis(connection_pool=redis_pool_proxies)
 redis_vault_keys = redis.Redis(connection_pool=redis_pool_keys)
 
-# --- TELEMETRY BROADCAST HELPER ---
 async def dispatch_gateway_telemetry(request: Request, status: str, client_slot: str, target_domain: str, exec_time: float):
-    """Safely dispatches telemetry events to main.py's master WebSocket broadcaster without blocking."""
     ui_broadcast = getattr(request.app.state, "ui_broadcast", None)
     if ui_broadcast:
         payload = {
@@ -81,11 +75,9 @@ async def dispatch_gateway_telemetry(request: Request, status: str, client_slot:
         except Exception as ex:
             logging.error(f"Telemetry dispatch error: {ex}")
 
-# --- PROXY CORE ROUTING & SECURITY ---
 BLOCKED_INTERNAL_HOSTS = {'localhost', '127.0.0.1', '0.0.0.0', '169.254.169.254', 'internal', 'metadata.google.internal'}
 
 def url_sentinel_shield(target_url: str) -> str:
-    """SSRF Shield: Blocks attacks against internal network resources, metadata endpoints, and local loopbacks."""
     try:
         if not target_url or not isinstance(target_url, str):
             raise HTTPException(status_code=400, detail="Bad Request: Target URL is missing or invalid.")
@@ -102,7 +94,6 @@ def url_sentinel_shield(target_url: str) -> str:
         raise HTTPException(status_code=400, detail="Bad Request: Malformed target URL parsing failed.")
 
 def sanitize_headers(original_headers: dict) -> dict:
-    """Strips tracking headers and sets clean User-Agent for anti-bot/scraping safety."""
     safe_headers = dict(original_headers)
     for tag in ['host', 'x-forwarded-for', 'x-real-ip', 'cf-connecting-ip', 'via', 'x-admin-key']:
         safe_headers.pop(tag, None)
@@ -110,7 +101,6 @@ def sanitize_headers(original_headers: dict) -> dict:
     return safe_headers
 
 async def proxy_stream_generator(client: httpx.AsyncClient, response: httpx.Response):
-    """Securely streams data chunks and guarantees absolute connection cleanup."""
     try:
         async for chunk in response.aiter_bytes(chunk_size=65536):
             yield chunk
@@ -124,15 +114,15 @@ async def proxy_stream_generator(client: httpx.AsyncClient, response: httpx.Resp
         except Exception:
             pass
 
-# --- MASTER UNIVERSAL PROXY ROUTE (Mounted under /gateway in main.py -> Becomes /gateway/proxy) ---
 @app.api_route("/proxy", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
 async def gateway_proxy_handler(request: Request, background_tasks: BackgroundTasks, target_url: str):
-    """
-    Master High-Performance Universal Proxy Routing Engine:
-    - Fully supports Video Streaming, E-Commerce Automation (Amazon/Flipkart session/cookie persistence), Web Scraping & API Testing.
-    - Supports GET/POST/PUT/DELETE/PATCH methods, request body payloads, and upstream response header relaying.
-    """
     start_time = time.time()
+    client_ip = request.client.host if request.client else "unknown"
+
+    # 1. CHECK IF IP IS ALREADY AUTO-BLOCKED DUE TO BRUTE FORCE
+    if await redis_vault_keys.exists(f"auto_blocked_ip:{client_ip}"):
+        raise HTTPException(status_code=403, detail="Forbidden: Your IP has been auto-blocked for 30 minutes due to suspicious brute-force attempts.")
+
     x_api_key = request.headers.get("x-api-key") or request.headers.get("X-API-Key")
     
     if not x_api_key:
@@ -144,13 +134,23 @@ async def gateway_proxy_handler(request: Request, background_tasks: BackgroundTa
         logging.error(f"Redis Key Vault error: {redis_err}")
         raise HTTPException(status_code=500, detail="Internal Server Error: Key validation vault failure.")
 
+    # 2. INVALID KEY BRUTE-FORCE PROTECTION (5 wrong attempts -> 30 min IP Ban)
     if not client_slot_name:
+        fail_key = f"invalid_key_attempts:{client_ip}"
+        fails = await redis_vault_keys.incr(fail_key)
+        if fails == 1:
+            await redis_vault_keys.expire(fail_key, 60) # 1 minute window for counting
+            
+        if fails >= 5:
+            await redis_vault_keys.setex(f"auto_blocked_ip:{client_ip}", 1800, "brute_force_exceeded")
+            logging.critical(f"BRUTE-FORCE SECURITY ALERT: IP {client_ip} has been auto-blocked for 30 minutes after {fails} failed API key attempts.")
+            raise HTTPException(status_code=403, detail="Forbidden: Too many invalid API key attempts. Your IP has been auto-blocked for 30 minutes.")
+
         await dispatch_gateway_telemetry(request, "auth_failed", "Unknown Hacker", "N/A", time.time() - start_time)
-        raise HTTPException(status_code=401, detail="Unauthorized: Invalid API Key.")
+        raise HTTPException(status_code=401, detail=f"Unauthorized: Invalid API Key. Attempt {fails}/5 before IP lockout.")
 
     target_domain = url_sentinel_shield(target_url)
     
-    # BULLETPROOF PROXY RETRY LOOP (Tries up to 3 times to get a valid, decryptable proxy IP without exhausting pool)
     decrypted_ip = None
     for attempt in range(3):
         try:
@@ -178,13 +178,7 @@ async def gateway_proxy_handler(request: Request, background_tasks: BackgroundTa
     except Exception:
         request_body = b""
 
-    # 2-Hour Maximum Timeout (7200 seconds) for heavy scraping, automation, and long video downloads
-    SAFE_TIMEOUT = httpx.Timeout(
-        connect=15.0, 
-        read=7200.0, 
-        write=15.0, 
-        pool=15.0
-    )
+    SAFE_TIMEOUT = httpx.Timeout(connect=15.0, read=7200.0, write=15.0, pool=15.0)
 
     proxy_client = None
     try:
@@ -202,7 +196,6 @@ async def gateway_proxy_handler(request: Request, background_tasks: BackgroundTa
         exec_time = time.time() - start_time
         background_tasks.add_task(dispatch_gateway_telemetry, request, "tunnel_established", client_slot_name, target_domain, exec_time)
         
-        # Forward upstream response headers (like Set-Cookie, Authorization tokens) safely to client/scraper
         excluded_headers = {'content-encoding', 'content-length', 'transfer-encoding', 'connection'}
         response_headers = {
             k: v for k, v in upstream_response.headers.items() 
@@ -242,7 +235,6 @@ async def gateway_proxy_handler(request: Request, background_tasks: BackgroundTa
 
 @app.get("/health")
 async def health_check():
-    """System health metrics endpoint for the Gateway."""
     try:
         vault_count = await redis_vault_proxies.scard("vip_proxy_pool")
         active_keys_count = len(await redis_vault_keys.keys("api_key:*"))
