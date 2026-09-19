@@ -32,16 +32,16 @@ class ProxyHunter:
         # Anti-SSRF Guard: Block internal or local network source URLs
         self.blocked_hosts = {'localhost', '127.0.0.1', '0.0.0.0', '169.254.169.254'}
 
-    async def _emit_telemetry(self, status: str, count: int, source: str = "all", execution_time: float = 0.0):
-        """Streams live telemetry data packets to the UI WebSocket dashboard safely."""
+    async def _emit_telemetry(self, status: str, count: int, execution_time: float = 0.0):
+        """Streams live telemetry data packets directly matching dashboard fields."""
         if self.ui_broadcast:
             try:
+                # Perfectly structured payload for instant UI live rendering
                 payload = {
-                    "engine": "master_1_hunter",
-                    "status": status,
-                    "source": source,
-                    "ips_found": count,
-                    "execution_time_sec": round(execution_time, 2)
+                    "hunter_status": "Active" if status != "error" else "Error",
+                    "hunted_count": count,
+                    "execution_time": f"{round(execution_time, 2)}s",
+                    "sources_active": len(self.target_sources)
                 }
                 if asyncio.iscoroutinefunction(self.ui_broadcast):
                     await self.ui_broadcast(payload)
@@ -56,7 +56,6 @@ class ProxyHunter:
         a strict 2MB size cap to prevent memory bombs, and extracts raw IPs.
         """
         extracted_ips = set()
-        start_time = time.time()
         
         # 1. SSRF Safety Shield on URL Hostname
         try:
@@ -69,7 +68,7 @@ class ProxyHunter:
             return extracted_ips
 
         try:
-            # 2. Strict 7.0-second timeout and streaming with 2MB ceiling to stop Tarpits/Memory crashes
+            # 2. Strict 7.0-second timeout and streaming with 2MB ceiling
             async with client.stream("GET", url, timeout=7.0) as response:
                 if response.status_code == 200:
                     raw_payload = ""
@@ -84,14 +83,11 @@ class ProxyHunter:
                     extracted_ips.update(found_ips)
                     
                     logging.info(f"Success: Extracted {len(found_ips)} raw IPs from {url}")
-                    await self._emit_telemetry("source_success", len(found_ips), url, time.time() - start_time)
                 else:
                     logging.warning(f"Target Unreachable: {url} returned status code {response.status_code}")
-                    await self._emit_telemetry("source_failed", 0, url)
                     
         except Exception as e:
             logging.error(f"Execution Failure on {url}: {str(e)}")
-            await self._emit_telemetry("source_error", 0, url)
             
         return extracted_ips
 
@@ -101,7 +97,9 @@ class ProxyHunter:
         """
         hunt_start_time = time.time()
         logging.info("Initiating secure global scrape for raw IPv4 addresses...")
-        await self._emit_telemetry("hunt_started", 0)
+        
+        # Initial push: Hunt started state
+        await self._emit_telemetry("running", 0, 0.0)
         
         unique_raw_ips = set() 
         
@@ -117,8 +115,9 @@ class ProxyHunter:
         total_time = time.time() - hunt_start_time
         logging.info(f"Hunt Cycle Completed. Total unique raw IPs aggregated: {total_unique}")
         
+        # Live push: Final completed hunt count & execution time
         await self._emit_telemetry(
-            status="hunt_completed", 
+            status="completed", 
             count=total_unique, 
             execution_time=total_time
         )
