@@ -46,18 +46,16 @@ class VaultDoctor:
         # Concurrency control: Max 100 active network checks simultaneously
         self.semaphore = asyncio.Semaphore(100)
 
-    async def _emit_telemetry(self, status: str, total_checked: int, total_purged: int, healthy_count: int, execution_time: float = 0.0):
-        """Safely broadcasts real-time health metrics to the WebSocket UI dashboard."""
+    async def _emit_telemetry(self, status: str, total_checked: int, total_purged: int, healthy_count: int):
+        """Safely broadcasts real-time health metrics directly matching dashboard fields."""
         if self.ui_broadcast:
             try:
-                health_score = int((healthy_count / total_checked) * 100) if total_checked > 0 else 0
+                health_score = int((healthy_count / total_checked) * 100) if total_checked > 0 else 100
                 payload = {
-                    "engine": "master_3_vault_doctor",
-                    "status": status,
-                    "total_ips_checked": total_checked,
-                    "dead_ips_purged": total_purged,
-                    "vault_health_score": health_score,
-                    "execution_time_sec": round(execution_time, 2)
+                    "maintenance_status": "Active" if status != "error" else "Error",
+                    "health_score": f"{health_score}%",
+                    "purged_count": total_purged,
+                    "stream_scan": "Active" if status != "completed" else "Idle"
                 }
                 if asyncio.iscoroutinefunction(self.ui_broadcast):
                     await self.ui_broadcast(payload)
@@ -111,11 +109,11 @@ class VaultDoctor:
 
         if total_vault_size == 0:
             logging.warning("Vault is currently empty. Maintenance cycle aborted.")
-            await self._emit_telemetry("maintenance_aborted", 0, 0, 0, round(time.time() - start_time, 2))
+            await self._emit_telemetry("aborted", 0, 0, 0)
             return
 
         # Broadcast maintenance start telemetry
-        await self._emit_telemetry("maintenance_started", total_vault_size, 0, total_vault_size)
+        await self._emit_telemetry("running", total_vault_size, dead_count, total_vault_size)
         logging.info(f"Scanning {len(valid_items)} valid entries in batches with semaphore protection...")
 
         # 2. Advanced Batch Chunking (Processes 200 proxies at a time to prevent RAM spikes)
@@ -138,7 +136,11 @@ class VaultDoctor:
         # Emergency Alert State
         if healthy_count == 0:
             logging.error("RED ALERT: Vault is critically low (0 IPs). Triggering emergency override.")
-            await self._emit_telemetry("panic_empty", total_vault_size, dead_count, healthy_count, execution_time)
+            await self._emit_telemetry("error", total_vault_size, dead_count, healthy_count)
         else:
             logging.info(f"Advanced Vault Maintenance Complete. Purged: {dead_count} | Healthy Remaining: {healthy_count}")
-            await self._emit_telemetry("maintenance_completed", total_vault_size, dead_count, healthy_count, execution_time)
+            await self._emit_telemetry("completed", total_vault_size, dead_count, healthy_count)
+
+    # Alias to seamlessly match main.py loop calls
+    async def execute_maintenance_cycle(self):
+        await self.perform_vault_surgery()
