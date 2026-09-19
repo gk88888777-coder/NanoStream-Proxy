@@ -45,10 +45,8 @@ admin_api_key_header = APIKeyHeader(name="X-Admin-Key")
 
 async def verify_local_admin_shield(request: Request, admin_key: str = Security(admin_api_key_header)):
     client_ip = request.client.host if request.client else "unknown"
-    if client_ip not in ["127.0.0.1", "::1", "localhost"]:
-        logging.critical(f"SECURITY BREACH: External IP {client_ip} attempted unauthorized access to Admin Panel!")
-        raise HTTPException(status_code=403, detail="Forbidden: Admin control room is strictly locked to local server vault.")
     
+    # लोकल आईपी की पाबंदी हटा दी गई है ताकि किसी भी डिवाइस से मास्टर की के साथ एक्सेस किया जा सके
     if admin_key != ADMIN_MASTER_KEY:
         logging.critical(f"SECURITY ALERT: Invalid Master Admin Key used from IP {client_ip}")
         raise HTTPException(status_code=403, detail="Forbidden: Master Admin Key Invalid.")
@@ -59,7 +57,6 @@ async def lightning_rate_limit_and_shield_middleware(request: Request, call_next
     if request.url.path.startswith("/gateway"):
         client_ip = request.client.host if request.client else "unknown"
         
-        # Check if IP is auto-blocked due to brute-force or rate limit
         if await redis_vault_keys.exists(f"auto_blocked_ip:{client_ip}") or await redis_vault_keys.exists(f"auto_blocked:{client_ip}"):
             return JSONResponse(
                 status_code=403, 
@@ -155,7 +152,6 @@ class KeyRevokeRequest(BaseModel):
 
 @app.post("/admin/keys/generate", dependencies=[Depends(verify_local_admin_shield)])
 async def generate_api_key(request: CreateKeyRequest):
-    # Perfect length control: 'ns_' + 32 hex chars = 35 characters total (Secure & Un-guessable)
     new_key = f"ns_{secrets.token_hex(16)}"
     redis_key_name = f"api_key:{new_key}"
     
@@ -168,7 +164,7 @@ async def generate_api_key(request: CreateKeyRequest):
         
     logging.info(f"ADMIN ACTION -> Generated {key_type} key for client: {request.client_name}")
     return {
-        "message": "Key generated successfully under secure local admin lock",
+        "message": "Key generated successfully under secure admin lock",
         "api_key": new_key,
         "client_name": request.client_name,
         "type": key_type
