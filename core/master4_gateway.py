@@ -57,7 +57,8 @@ redis_pool_keys = redis.ConnectionPool(
 redis_vault_proxies = redis.Redis(connection_pool=redis_pool_proxies)
 redis_vault_keys = redis.Redis(connection_pool=redis_pool_keys)
 
-async def dispatch_gateway_telemetry(request: Request, status: str, client_slot: str, target_domain: str, exec_time: float):
+async def dispatch_gateway_telemetry(request: Request, status: str, client_slot: str, target_domain: str, exec_time: float, http_status_code: int = 200):
+    """Dispatches real-time gateway telemetry matching dashboard UI requirements."""
     ui_broadcast = getattr(request.app.state, "ui_broadcast", None)
     if ui_broadcast:
         payload = {
@@ -65,7 +66,12 @@ async def dispatch_gateway_telemetry(request: Request, status: str, client_slot:
             "status": status,
             "client_slot": client_slot,
             "target_domain": target_domain,
-            "execution_time_sec": round(exec_time, 4)
+            "execution_time_sec": round(exec_time, 4),
+            # Dashboard UI Explicit Synced Fields
+            "gateway_status": "Active" if status not in ["error", "upstream_timeout", "upstream_network_error", "auth_failed"] else "Error",
+            "active_client": client_slot,
+            "throughput": f"{round(exec_time, 2)}s",
+            "http_status": str(http_status_code)
         }
         try:
             if asyncio.iscoroutinefunction(ui_broadcast):
@@ -146,7 +152,7 @@ async def gateway_proxy_handler(request: Request, background_tasks: BackgroundTa
             logging.critical(f"BRUTE-FORCE SECURITY ALERT: IP {client_ip} has been auto-blocked for 30 minutes after {fails} failed API key attempts.")
             raise HTTPException(status_code=403, detail="Forbidden: Too many invalid API key attempts. Your IP has been auto-blocked for 30 minutes.")
 
-        await dispatch_gateway_telemetry(request, "auth_failed", "Unknown Hacker", "N/A", time.time() - start_time)
+        await dispatch_gateway_telemetry(request, "auth_failed", "Unknown Hacker", "N/A", time.time() - start_time, 401)
         raise HTTPException(status_code=401, detail=f"Unauthorized: Invalid API Key. Attempt {fails}/5 before IP lockout.")
 
     target_domain = url_sentinel_shield(target_url)
@@ -167,7 +173,7 @@ async def gateway_proxy_handler(request: Request, background_tasks: BackgroundTa
             continue
 
     if not decrypted_ip:
-        await dispatch_gateway_telemetry(request, "vault_empty_error", client_slot_name, target_domain, time.time() - start_time)
+        await dispatch_gateway_telemetry(request, "vault_empty_error", client_slot_name, target_domain, time.time() - start_time, 503)
         raise HTTPException(status_code=503, detail="Service Unavailable: Proxy Vault is empty or contains unreadable tokens.")
 
     proxy_url = f"http://{decrypted_ip}"
@@ -194,7 +200,7 @@ async def gateway_proxy_handler(request: Request, background_tasks: BackgroundTa
         )
         
         exec_time = time.time() - start_time
-        background_tasks.add_task(dispatch_gateway_telemetry, request, "tunnel_established", client_slot_name, target_domain, exec_time)
+        background_tasks.add_task(dispatch_gateway_telemetry, request, "tunnel_established", client_slot_name, target_domain, exec_time, upstream_response.status_code)
         
         excluded_headers = {'content-encoding', 'content-length', 'transfer-encoding', 'connection'}
         response_headers = {
@@ -213,7 +219,7 @@ async def gateway_proxy_handler(request: Request, background_tasks: BackgroundTa
                 await proxy_client.aclose()
             except Exception:
                 pass
-        await dispatch_gateway_telemetry(request, "upstream_timeout", client_slot_name, target_domain, time.time() - start_time)
+        await dispatch_gateway_telemetry(request, "upstream_timeout", client_slot_name, target_domain, time.time() - start_time, 504)
         raise HTTPException(status_code=504, detail="Gateway Timeout: Upstream target took too long to respond.")
     except httpx.RequestError as req_err:
         if proxy_client:
@@ -222,7 +228,7 @@ async def gateway_proxy_handler(request: Request, background_tasks: BackgroundTa
             except Exception:
                 pass
         logging.error(f"Upstream network error via proxy {decrypted_ip}: {req_err}")
-        await dispatch_gateway_telemetry(request, "upstream_network_error", client_slot_name, target_domain, time.time() - start_time)
+        await dispatch_gateway_telemetry(request, "upstream_network_error", client_slot_name, target_domain, time.time() - start_time, 502)
         raise HTTPException(status_code=502, detail="Bad Gateway: Proxy tunnel or upstream connection failed.")
     except Exception as e:
         if proxy_client:
