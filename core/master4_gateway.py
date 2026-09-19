@@ -4,13 +4,11 @@ import time
 import os
 import sys
 import logging
-import secrets
-from fastapi import FastAPI, HTTPException, Request, BackgroundTasks, WebSocket, WebSocketDisconnect
-from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
+from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 import redis.asyncio as redis
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from urllib.parse import urlparse
 
 # Security Guard: Block execution if run as root user
@@ -21,14 +19,14 @@ def enforce_security_guard():
 
 enforce_security_guard()
 
-# Professional logging setup for Engine 4 Master Gateway
+# Professional logging setup for Engine 4 Gateway
 logging.basicConfig(
     level=logging.INFO, 
-    format='%(asctime)s - [ENGINE-4: ULTRA-GATEWAY] - %(message)s',
+    format='%(asctime)s - [ENGINE-4: GATEWAY-CORE] - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
-app = FastAPI(title="NanoStream 4X Gateway", version="5.5.0")
+app = FastAPI(title="NanoStream 4X Gateway Core", version="6.0.0")
 
 # --- CORS MIDDLEWARE ---
 app.add_middleware(
@@ -39,29 +37,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- UI CONTROL PANEL ROUTE ---
-@app.get("/", response_class=HTMLResponse)
-async def serve_index():
-    """Serves the main Control Panel UI."""
-    try:
-        file_path = "index.html" 
-        if not os.path.exists(file_path):
-            file_path = "../index.html"
-            
-        with open(file_path, "r", encoding="utf-8") as f:
-            return f.read()
-    except Exception as e:
-        return f"<h1>Error 404</h1><p>index.html not found. Error: {e}</p>"
-
 # Enterprise-grade fixed encryption key synchronized across engines
 DEFAULT_FIXED_KEY = "W3z9Lp7m1n4b6v8c0x3z5l7j9h1g3f5d7s9a2p4q6w8="
 ENCRYPTION_KEY = os.environ.get("PROXY_ENCRYPTION_KEY", DEFAULT_FIXED_KEY)
-cipher_suite = Fernet(ENCRYPTION_KEY.encode('utf-8'))
+try:
+    cipher_suite = Fernet(ENCRYPTION_KEY.encode('utf-8'))
+except Exception as e:
+    logging.critical(f"FATAL: Invalid PROXY_ENCRYPTION_KEY configuration: {e}")
+    sys.exit(1)
 
-# Master Admin Key for Control Panel authentication
-MASTER_ADMIN_KEY = os.environ.get("MASTER_ADMIN_KEY", "nanostream_master_secure_2026")
-
-# Environment-driven secure Redis configuration
+# Environment-driven secure Redis configuration (Matches main.py DB 0 & DB 1)
 REDIS_HOST = os.environ.get("REDIS_HOST", "127.0.0.1")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
 REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD", None)
@@ -76,177 +61,191 @@ redis_pool_keys = redis.ConnectionPool(
 redis_vault_proxies = redis.Redis(connection_pool=redis_pool_proxies)
 redis_vault_keys = redis.Redis(connection_pool=redis_pool_keys)
 
-# --- REAL-TIME WEBSOCKET CONNECTION MANAGER ---
-class ConnectionManager:
-    def __init__(self):
-        self.active_connections: list[WebSocket] = []
-
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-
-    def disconnect(self, websocket: WebSocket):
-        if websocket in self.active_connections:
-            self.active_connections.remove(websocket)
-
-    async def broadcast(self, data: dict):
-        for connection in self.active_connections:
-            try:
-                await connection.send_json(data)
-            except Exception:
-                pass
-
-manager = ConnectionManager()
-
-async def emit_gateway_telemetry(status: str, client_slot: str, target_domain: str, execution_time: float):
-    """Broadcasts real-time routing telemetry to dashboard via WebSocket."""
-    payload = {
-        "engine": "master_4_gateway",
-        "status": status,
-        "client_slot": client_slot,
-        "target_domain": target_domain,
-        "execution_time_sec": round(execution_time, 4)
-    }
-    # FIXED: asyncio.create_task से ब्रॉडकास्ट सुरक्षित हो जाता है, सर्वर लटकता नहीं है
-    asyncio.create_task(manager.broadcast(payload))
-
-app.state.ui_broadcast = emit_gateway_telemetry
-
-@app.websocket("/ws/telemetry")
-async def websocket_telemetry_endpoint(websocket: WebSocket):
-    """Live WebSocket channel for real-time frontend dashboard streaming."""
-    await manager.connect(websocket)
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-
-# --- ADMIN API ENDPOINTS ---
-class KeyGenRequest(BaseModel):
-    client_name: str
-    expiry_seconds: int | None = None
-
-@app.post("/admin/keys/generate")
-async def generate_api_key(req: KeyGenRequest, request: Request):
-    """Generates and stores a new client API key in Redis DB 1."""
-    admin_header = request.headers.get("x-admin-key") or request.headers.get("X-Admin-Key")
-    if admin_header != MASTER_ADMIN_KEY:
-        raise HTTPException(status_code=403, detail="Forbidden: Invalid Master Admin Key.")
-    
-    api_key = f"ns_{secrets.token_hex(16)}"
-    key_prefix = api_key[:8] + "..."
-    
-    if req.expiry_seconds:
-        await redis_vault_keys.set(f"api_key:{api_key}", req.client_name, ex=req.expiry_seconds)
-    else:
-        await redis_vault_keys.set(f"api_key:{api_key}", req.client_name)
-        
-    logging.info(f"API Key successfully generated for client: {req.client_name}")
-    return {"client_name": req.client_name, "api_key": api_key, "key_prefix": key_prefix}
-
-@app.get("/admin/keys/list")
-async def list_active_keys(request: Request):
-    """Retrieves active client list from Redis DB 1 vault."""
-    admin_header = request.headers.get("x-admin-key") or request.headers.get("X-Admin-Key")
-    if admin_header != MASTER_ADMIN_KEY:
-        raise HTTPException(status_code=403, detail="Forbidden: Invalid Master Admin Key.")
-    
-    keys = await redis_vault_keys.keys("api_key:*")
-    active_clients = []
-    for k in keys:
-        client_name = await redis_vault_keys.get(k)
-        raw_key = k.replace("api_key:", "")
-        active_clients.append({
-            "client_name": client_name,
-            "key_prefix": raw_key[:8] + "...",
-            "type": "Permanent"
-        })
-    return {"active_clients": active_clients}
+# --- TELEMETRY BROADCAST HELPER ---
+async def dispatch_gateway_telemetry(request: Request, status: str, client_slot: str, target_domain: str, exec_time: float):
+    """Safely dispatches telemetry events to main.py's master WebSocket broadcaster without blocking."""
+    ui_broadcast = getattr(request.app.state, "ui_broadcast", None)
+    if ui_broadcast:
+        payload = {
+            "engine": "master_4_gateway",
+            "status": status,
+            "client_slot": client_slot,
+            "target_domain": target_domain,
+            "execution_time_sec": round(exec_time, 4)
+        }
+        try:
+            if asyncio.iscoroutinefunction(ui_broadcast):
+                await ui_broadcast(payload)
+            else:
+                asyncio.create_task(ui_broadcast(payload))
+        except Exception as ex:
+            logging.error(f"Telemetry dispatch error: {ex}")
 
 # --- PROXY CORE ROUTING & SECURITY ---
-BLOCKED_INTERNAL_HOSTS = {'localhost', '127.0.0.1', '0.0.0.0', '169.254.169.254'}
+BLOCKED_INTERNAL_HOSTS = {'localhost', '127.0.0.1', '0.0.0.0', '169.254.169.254', 'internal', 'metadata.google.internal'}
 
-def url_sentinel_shield(target_url: str, client_slot: str) -> str:
-    """Blocks SSRF attacks against internal network resources."""
+def url_sentinel_shield(target_url: str) -> str:
+    """SSRF Shield: Blocks attacks against internal network resources, metadata endpoints, and local loopbacks."""
     try:
+        if not target_url or not isinstance(target_url, str):
+            raise HTTPException(status_code=400, detail="Bad Request: Target URL is missing or invalid.")
         parsed_url = urlparse(target_url)
+        if not parsed_url.scheme or not parsed_url.netloc:
+            raise HTTPException(status_code=400, detail="Bad Request: Malformed target URL schema.")
         hostname = parsed_url.hostname.lower() if parsed_url.hostname else "unknown_domain"
-        if hostname in BLOCKED_INTERNAL_HOSTS or hostname.startswith(('192.168.', '10.', '172.16.')):
+        if hostname in BLOCKED_INTERNAL_HOSTS or hostname.startswith(('192.168.', '10.', '172.16.', '127.', '0.')):
             raise HTTPException(status_code=403, detail="Forbidden: SSRF Shield blocked internal routing.")
         return hostname
     except Exception as e:
         if isinstance(e, HTTPException):
             raise e
-        raise HTTPException(status_code=400, detail="Bad Request: Malformed target URL.")
+        raise HTTPException(status_code=400, detail="Bad Request: Malformed target URL parsing failed.")
 
 def sanitize_headers(original_headers: dict) -> dict:
-    """Strips tracking headers and normalizes User-Agent."""
+    """Strips tracking headers and sets clean User-Agent for anti-bot/scraping safety."""
     safe_headers = dict(original_headers)
-    for tag in ['host', 'x-forwarded-for', 'x-real-ip', 'cf-connecting-ip', 'via']:
+    for tag in ['host', 'x-forwarded-for', 'x-real-ip', 'cf-connecting-ip', 'via', 'x-admin-key']:
         safe_headers.pop(tag, None)
     safe_headers['User-Agent'] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
     return safe_headers
 
 async def proxy_stream_generator(client: httpx.AsyncClient, response: httpx.Response):
-    """Streams data chunks securely and closes connections."""
+    """Securely streams data chunks and guarantees absolute connection cleanup."""
     try:
         async for chunk in response.aiter_bytes(chunk_size=65536):
             yield chunk
     finally:
-        await response.aclose()
-        await client.aclose()
+        try:
+            await response.aclose()
+        except Exception:
+            pass
+        try:
+            await client.aclose()
+        except Exception:
+            pass
 
-@app.get("/proxy")
+# --- MASTER UNIVERSAL PROXY ROUTE (Mounted under /gateway in main.py -> Becomes /gateway/proxy) ---
+@app.api_route("/proxy", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
 async def gateway_proxy_handler(request: Request, background_tasks: BackgroundTasks, target_url: str):
-    """High-performance proxy routing endpoint with API key check and Vault decryption."""
+    """
+    Master High-Performance Universal Proxy Routing Engine:
+    - Fully supports Video Streaming, E-Commerce Automation (Amazon/Flipkart session/cookie persistence), Web Scraping & API Testing.
+    - Supports GET/POST/PUT/DELETE/PATCH methods, request body payloads, and upstream response header relaying.
+    """
     start_time = time.time()
     x_api_key = request.headers.get("x-api-key") or request.headers.get("X-API-Key")
     
     if not x_api_key:
         raise HTTPException(status_code=401, detail="Unauthorized: API Key missing.")
         
-    client_slot_name = await redis_vault_keys.get(f"api_key:{x_api_key}") or await redis_vault_keys.get(x_api_key)
+    try:
+        client_slot_name = await redis_vault_keys.get(f"api_key:{x_api_key}") or await redis_vault_keys.get(x_api_key)
+    except Exception as redis_err:
+        logging.error(f"Redis Key Vault error: {redis_err}")
+        raise HTTPException(status_code=500, detail="Internal Server Error: Key validation vault failure.")
+
     if not client_slot_name:
-        background_tasks.add_task(emit_gateway_telemetry, "auth_failed", "Unknown Hacker", "N/A", time.time() - start_time)
+        await dispatch_gateway_telemetry(request, "auth_failed", "Unknown Hacker", "N/A", time.time() - start_time)
         raise HTTPException(status_code=401, detail="Unauthorized: Invalid API Key.")
 
-    target_domain = url_sentinel_shield(target_url, client_slot_name)
+    target_domain = url_sentinel_shield(target_url)
     
-    # FIXED: spop (डिलीट) की जगह srandmember (सिर्फ चुनना) इस्तेमाल किया है ताकि IP खत्म न हों!
-    encrypted_ip_bytes = await redis_vault_proxies.srandmember("vip_proxy_pool")
-    
-    if not encrypted_ip_bytes:
-        background_tasks.add_task(emit_gateway_telemetry, "vault_empty_error", client_slot_name, target_domain, time.time() - start_time)
-        raise HTTPException(status_code=503, detail="Service Unavailable: Proxy Vault is empty.")
-        
-    try:
-        if isinstance(encrypted_ip_bytes, str):
-            encrypted_ip_bytes = encrypted_ip_bytes.encode('utf-8')
-        decrypted_ip = cipher_suite.decrypt(encrypted_ip_bytes).decode('utf-8')
-    except Exception:
-        raise HTTPException(status_code=500, detail="Internal Security Error: Token decryption failed.")
+    # BULLETPROOF PROXY RETRY LOOP (Tries up to 3 times to get a valid, decryptable proxy IP without exhausting pool)
+    decrypted_ip = None
+    for attempt in range(3):
+        try:
+            encrypted_ip_bytes = await redis_vault_proxies.srandmember("vip_proxy_pool")
+            if not encrypted_ip_bytes:
+                break
+            if isinstance(encrypted_ip_bytes, str):
+                encrypted_ip_bytes = encrypted_ip_bytes.encode('utf-8')
+            decrypted_ip = cipher_suite.decrypt(encrypted_ip_bytes).decode('utf-8')
+            break
+        except InvalidToken:
+            continue
+        except Exception:
+            continue
+
+    if not decrypted_ip:
+        await dispatch_gateway_telemetry(request, "vault_empty_error", client_slot_name, target_domain, time.time() - start_time)
+        raise HTTPException(status_code=503, detail="Service Unavailable: Proxy Vault is empty or contains unreadable tokens.")
 
     proxy_url = f"http://{decrypted_ip}"
     camouflaged_headers = sanitize_headers(request.headers)
 
     try:
+        request_body = await request.body()
+    except Exception:
+        request_body = b""
+
+    # 2-Hour Maximum Timeout (7200 seconds) for heavy scraping, automation, and long video downloads
+    SAFE_TIMEOUT = httpx.Timeout(
+        connect=15.0, 
+        read=7200.0, 
+        write=15.0, 
+        pool=15.0
+    )
+
+    proxy_client = None
+    try:
         transport = httpx.AsyncHTTPTransport(proxy=proxy_url)
-        # FIXED: timeout बढ़ाया गया है ताकि बड़ी फाइलें फेल न हों
-        proxy_client = httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(30.0, read=None), follow_redirects=True)
-        upstream_response = await proxy_client.get(target_url, headers=camouflaged_headers, stream=True)
+        proxy_client = httpx.AsyncClient(transport=transport, timeout=SAFE_TIMEOUT, follow_redirects=True)
+        
+        upstream_response = await proxy_client.request(
+            method=request.method,
+            url=target_url,
+            headers=camouflaged_headers,
+            content=request_body if request_body else None,
+            stream=True
+        )
         
         exec_time = time.time() - start_time
-        background_tasks.add_task(emit_gateway_telemetry, "tunnel_established", client_slot_name, target_domain, exec_time)
+        background_tasks.add_task(dispatch_gateway_telemetry, request, "tunnel_established", client_slot_name, target_domain, exec_time)
         
-        return StreamingResponse(proxy_stream_generator(proxy_client, upstream_response), status_code=upstream_response.status_code)
+        # Forward upstream response headers (like Set-Cookie, Authorization tokens) safely to client/scraper
+        excluded_headers = {'content-encoding', 'content-length', 'transfer-encoding', 'connection'}
+        response_headers = {
+            k: v for k, v in upstream_response.headers.items() 
+            if k.lower() not in excluded_headers
+        }
+        
+        return StreamingResponse(
+            proxy_stream_generator(proxy_client, upstream_response), 
+            status_code=upstream_response.status_code,
+            headers=response_headers
+        )
+    except httpx.TimeoutException:
+        if proxy_client:
+            try:
+                await proxy_client.aclose()
+            except Exception:
+                pass
+        await dispatch_gateway_telemetry(request, "upstream_timeout", client_slot_name, target_domain, time.time() - start_time)
+        raise HTTPException(status_code=504, detail="Gateway Timeout: Upstream target took too long to respond.")
+    except httpx.RequestError as req_err:
+        if proxy_client:
+            try:
+                await proxy_client.aclose()
+            except Exception:
+                pass
+        logging.error(f"Upstream network error via proxy {decrypted_ip}: {req_err}")
+        await dispatch_gateway_telemetry(request, "upstream_network_error", client_slot_name, target_domain, time.time() - start_time)
+        raise HTTPException(status_code=502, detail="Bad Gateway: Proxy tunnel or upstream connection failed.")
     except Exception as e:
-        background_tasks.add_task(emit_gateway_telemetry, "upstream_timeout", client_slot_name, target_domain, time.time() - start_time)
-        raise HTTPException(status_code=502, detail="Bad Gateway: Upstream connection failed.")
+        if proxy_client:
+            try:
+                await proxy_client.aclose()
+            except Exception:
+                pass
+        logging.error(f"Unexpected proxy routing exception: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error: Secure tunnel failure.")
 
 @app.get("/health")
 async def health_check():
-    """System health metrics endpoint."""
-    vault_count = await redis_vault_proxies.scard("vip_proxy_pool")
-    active_keys_count = len(await redis_vault_keys.keys("api_key:*"))
-    return {"status": "online", "shield": "active", "available_proxy_ips": vault_count, "active_clients": active_keys_count}
+    """System health metrics endpoint for the Gateway."""
+    try:
+        vault_count = await redis_vault_proxies.scard("vip_proxy_pool")
+        active_keys_count = len(await redis_vault_keys.keys("api_key:*"))
+        return {"status": "gateway_online", "shield": "active", "available_proxy_ips": vault_count, "active_clients": active_keys_count}
+    except Exception as e:
+        return {"status": "degraded", "error": str(e)}
