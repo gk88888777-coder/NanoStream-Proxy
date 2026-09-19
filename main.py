@@ -4,7 +4,7 @@ import json
 from fastapi import FastAPI, HTTPException, Depends, Security, Request, WebSocket, WebSocketDisconnect
 from fastapi.security import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from pydantic import BaseModel
 import redis.asyncio as redis
 import uuid
@@ -213,9 +213,39 @@ async def list_api_keys():
         })
     return {"active_clients": active_clients, "total_active": len(keys)}
 
+# ==========================================
+# BULLETPROOF DASHBOARD ROUTE (ABSOLUTE PATH)
+# ==========================================
 @app.get("/")
 async def premium_dashboard():
-    return FileResponse("index.html")
+    """
+    Serves index.html using an absolute path.
+    Guarantees no 'Not Found' 404 JSON errors occur during updates.
+    """
+    try:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        file_path = os.path.join(base_dir, "index.html")
+        
+        if os.path.exists(file_path):
+            return FileResponse(file_path)
+            
+        return HTMLResponse(
+            content="""
+            <html>
+                <head><title>NanoStream 4X Control Room</title></head>
+                <body style="font-family: Arial, sans-serif; background: #0f172a; color: #f8fafc; text-align: center; padding-top: 100px;">
+                    <h1 style="color: #38bdf8;">NanoStream 4X Master Core Online</h1>
+                    <p style="color: #cbd5e1;">System engines are running smoothly, but the index.html UI file is missing.</p>
+                </body>
+            </html>
+            """,
+            status_code=200
+        )
+    except Exception as e:
+        return HTMLResponse(
+            content=f"<h1>System Error</h1><p style='color: red;'>{str(e)}</p>", 
+            status_code=500
+        )
 
 app.mount("/gateway", gateway_app)
 
