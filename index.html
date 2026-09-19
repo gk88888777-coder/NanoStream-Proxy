@@ -3,311 +3,265 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NanoStream 4X - Enterprise Executive Command Center</title>
+    <title>NanoStream 4X - Master Control Room</title>
     <style>
         :root {
-            --bg-base: #060913;
-            --bg-card: #0f172a;
-            --border-color: #1e293b;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --neon-cyan: #06b6d4;
-            --neon-green: #10b981;
-            --neon-gold: #f59e0b;
-            --neon-red: #ef4444;
+            --bg-color: #f4ebd0;
+            --card-bg: #fffdf9;
+            --text-main: #2d2319;
+            --accent-green: #15803d;
+            --accent-red: #b91c1c;
+            --accent-gold: #d97706;
+            --border-color: #e6d5bc;
+            --muted-text: #78716c;
         }
         body {
-            font-family: 'Courier New', Courier, monospace, sans-serif;
-            background-color: var(--bg-base);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
             color: var(--text-main);
             margin: 0;
-            padding: 12px;
+            padding: 16px;
             display: flex;
             justify-content: center;
         }
         .container {
             width: 100%;
-            max-width: 950px;
+            max-width: 650px;
         }
-        .top-command-bar {
-            background: var(--bg-card);
+        .header-card, .card {
+            background-color: var(--card-bg);
             border: 1px solid var(--border-color);
-            border-radius: 10px;
-            padding: 14px 18px;
-            margin-bottom: 12px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 16px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
         }
-        .status-pill {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 12px;
-            font-weight: bold;
+        .header-title {
+            font-size: 13px;
+            font-weight: 700;
             letter-spacing: 1px;
-            color: var(--neon-cyan);
-        }
-        .pulse-dot {
-            width: 9px;
-            height: 9px;
-            background-color: var(--neon-green);
-            border-radius: 50%;
-            box-shadow: 0 0 10px var(--neon-green);
-            animation: pulse-glow 1.5s infinite;
-        }
-        @keyframes pulse-glow {
-            0% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.4; transform: scale(0.85); }
-            100% { opacity: 1; transform: scale(1); }
-        }
-        .card {
-            background-color: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            padding: 16px;
-            margin-bottom: 12px;
-        }
-        .grid-4 {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 10px;
-        }
-        @media (max-width: 768px) {
-            .grid-4 { grid-template-columns: repeat(2, 1fr); }
-        }
-        @media (max-width: 480px) {
-            .grid-4 { grid-template-columns: 1fr; }
-        }
-        .engine-card {
-            background: #090e1a;
-            border: 1px solid #1a2744;
-            border-radius: 8px;
-            padding: 12px;
-        }
-        .engine-title {
-            font-size: 11px;
-            font-weight: bold;
-            color: var(--neon-gold);
-            text-transform: uppercase;
-            margin-bottom: 8px;
-            border-bottom: 1px solid #1a2744;
-            padding-bottom: 4px;
-        }
-        .metric-row {
+            color: #78350f;
             display: flex;
+            align-items: center;
             justify-content: space-between;
-            font-size: 12px;
-            margin-bottom: 5px;
-            color: var(--text-muted);
         }
-        .metric-val { color: var(--text-main); font-weight: bold; }
+        .status-badge {
+            width: 8px;
+            height: 8px;
+            background-color: var(--accent-green);
+            border-radius: 50%;
+            display: inline-block;
+            box-shadow: 0 0 6px var(--accent-green);
+        }
+        .hidden { display: none !important; }
         input, select {
             width: 100%;
-            padding: 10px;
-            margin: 6px 0 12px 0;
-            background: #060913;
+            padding: 12px;
+            margin: 8px 0 16px 0;
             border: 1px solid var(--border-color);
-            color: white;
-            border-radius: 6px;
+            border-radius: 8px;
+            background: #fff;
             box-sizing: border-box;
-            font-family: inherit;
-            font-size: 13px;
+            font-size: 14px;
+            color: var(--text-main);
         }
         button {
             width: 100%;
-            padding: 10px;
+            padding: 12px;
             border: none;
-            border-radius: 6px;
+            border-radius: 8px;
             font-weight: bold;
             cursor: pointer;
-            font-family: inherit;
-            font-size: 13px;
+            font-size: 14px;
         }
-        .btn-gold { background: var(--neon-gold); color: #000; }
-        .btn-green { background: var(--neon-green); color: #000; }
-        .btn-red { background: var(--neon-red); color: #fff; width: auto; padding: 4px 10px; font-size: 11px; }
-        .hidden { display: none !important; }
-        .terminal-box {
-            background: #03050a;
-            border: 1px solid #1e293b;
-            border-radius: 6px;
-            padding: 10px;
-            font-size: 11px;
-            color: #38bdf8;
-            height: 110px;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            line-height: 1.4;
+        .btn-primary { background-color: var(--accent-gold); color: white; }
+        .btn-success { background-color: var(--accent-green); color: white; }
+        .btn-danger { background-color: var(--accent-red); color: white; padding: 6px 12px; width: auto; font-size: 12px; }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
         }
-        .client-row {
-            background: #090e1a;
-            border: 1px solid #1a2744;
-            padding: 10px;
-            border-radius: 6px;
-            margin-bottom: 8px;
+        @media (min-width: 500px) {
+            .stats-grid { grid-template-columns: repeat(4, 1fr); }
+        }
+        .stat-box {
+            background: #fff;
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            text-align: center;
+        }
+        .stat-value { font-size: 16px; font-weight: bold; color: #b45309; }
+        .stat-label { font-size: 11px; color: var(--muted-text); margin-top: 4px; text-transform: uppercase; }
+        .client-item {
+            background: #fff;
+            padding: 12px 14px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 10px;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
-        .error-txt { color: var(--neon-red); font-size: 12px; text-align: center; margin-top: 8px; }
-        .success-box { background: #064e3b; border: 1px solid #059669; padding: 10px; border-radius: 6px; font-size: 12px; margin-top: 10px; color: #a7f3d0; word-break: break-all; }
+        .terminal-box {
+            background: #1e1b18;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 12px;
+            font-family: monospace;
+            font-size: 11px;
+            color: #4ade80;
+            height: 100px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            line-height: 1.4;
+            margin-top: 10px;
+        }
+        .error-msg { color: var(--accent-red); font-size: 13px; text-align: center; margin-top: 10px; }
+        .success-box { background: #f0fdf4; border: 1px solid #bbf7d0; padding: 12px; border-radius: 8px; font-size: 13px; margin-top: 10px; color: #166534; word-break: break-all; }
     </style>
 </head>
 <body>
 
 <div class="container">
-
-    <!-- Top Command & Status Bar -->
-    <div class="top-command-bar">
-        <div class="status-pill">
-            <span class="pulse-dot" id="ws-pulse"></span>
-            <span>NANOSTREAM 4X // LIVE EXECUTIVE COMMAND</span>
+    <!-- Header -->
+    <div class="header-card">
+        <div class="header-title">
+            <span><span class="status-badge" id="ws-indicator"></span> NANOSTREAM 4X // COMMAND CENTER</span>
+            <div id="auth-action-slot"></div>
         </div>
-        <div id="auth-action-slot"></div>
+        <div style="font-size: 12px; color: var(--muted-text); margin-top: 4px;">Enterprise-Grade Proxy Gateway & Zero-Trust Vault Control</div>
     </div>
 
-    <!-- Login Authentication Section -->
+    <!-- Login Section -->
     <div id="login-section" class="card">
-        <h3>🔑 SECURE MASTER VAULT GATEWAY</h3>
-        <p style="font-size: 12px; color: var(--text-muted);">Enter master credentials for unhindered remote command access.</p>
-        <input type="password" id="admin-key-input" placeholder="Enter Master Admin Key...">
-        <button class="btn-gold" onclick="authenticateVault()">Authorize & Open Command Room ⚡</button>
-        <div id="login-error" class="error-txt"></div>
+        <h3>🔑 MASTER ADMIN KEY REQUIRED</h3>
+        <p style="font-size: 13px; color: var(--muted-text);">Enter administrative master credentials to manage Vault keys.</p>
+        <input type="password" id="admin-key-input" placeholder="Enter Master Admin Key (e.g. nano_admin_777_secure)">
+        <button class="btn-primary" onclick="unlockControlRoom()">Unlock Control Room ⚡</button>
+        <div id="login-error" class="error-msg"></div>
     </div>
 
-    <!-- Live Command Room Dashboard -->
+    <!-- Dashboard Section -->
     <div id="dashboard-section" class="hidden">
-
-        <!-- 4-Engine Real-Time Telemetry Grid -->
+        
         <div class="card">
-            <h3 style="margin-top: 0; font-size: 13px; color: var(--neon-cyan); letter-spacing: 0.5px;">
-                ⚡ 4-ENGINE ARCHITECTURE REAL-TIME METRICS
-            </h3>
-            
-            <div class="grid-4">
-                <!-- Engine 1 -->
-                <div class="engine-card">
-                    <div class="engine-title">Engine 1: Hunter</div>
-                    <div class="metric-row"><span>State:</span> <span class="metric-val" style="color: var(--neon-green);">ACTIVE</span></div>
-                    <div class="metric-row"><span>Hunted IPs:</span> <span id="m-eng1-hunted" class="metric-val">0</span></div>
+            <h3 style="margin-top: 0; font-size: 15px; color: #78350f; margin-bottom: 12px;">⚡ 4-ENGINE LIVE TELEMETRY MATRIX</h3>
+
+            <!-- Stats Grid -->
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <div id="stat-proxies" class="stat-value">--</div>
+                    <div class="stat-label">Hunter / Pool</div>
                 </div>
-                <!-- Engine 2 -->
-                <div class="engine-card">
-                    <div class="engine-title">Engine 2: Inspector</div>
-                    <div class="metric-row"><span>State:</span> <span class="metric-val" style="color: var(--neon-green);">ACTIVE</span></div>
-                    <div class="metric-row"><span>Inspecting:</span> <span id="m-eng2-status" class="metric-val">Polling</span></div>
+                <div class="stat-box">
+                    <div id="eng2-status" class="stat-value" style="color: #15803d;">Active</div>
+                    <div class="stat-label">Inspector</div>
                 </div>
-                <!-- Engine 3 -->
-                <div class="engine-card">
-                    <div class="engine-title">Engine 3: Doctor</div>
-                    <div class="metric-row"><span>Healthy Pool:</span> <span id="m-stat-proxies" class="metric-val">--</span></div>
-                    <div class="metric-row"><span>Purged Count:</span> <span id="m-eng3-purged" class="metric-val">0</span></div>
+                <div class="stat-box">
+                    <div id="eng3-purged" class="stat-value">0</div>
+                    <div class="stat-label">Doctor Purged</div>
                 </div>
-                <!-- Engine 4 -->
-                <div class="engine-card">
-                    <div class="engine-title">Engine 4: Gateway</div>
-                    <div class="metric-row"><span>SSRF Shield:</span> <span class="metric-val" style="color: var(--neon-green);">SECURE</span></div>
-                    <div class="metric-row"><span>Clients:</span> <span id="m-stat-clients" class="metric-val">--</span></div>
+                <div class="stat-box">
+                    <div id="stat-clients" class="stat-value">--</div>
+                    <div class="stat-label">Active Clients</div>
                 </div>
             </div>
+
+            <!-- Terminal Log Stream -->
+            <div style="font-size: 12px; font-weight: bold; color: var(--text-main); margin-top: 15px;">📡 Live Telemetry Stream</div>
+            <div id="terminal-log" class="terminal-box">[SYSTEM] Initializing live telemetry connection...</div>
         </div>
 
-        <!-- Live Telemetry Stream Terminal -->
+        <!-- Key Generation Form -->
         <div class="card">
-            <h3 style="margin-top: 0; font-size: 13px; color: var(--neon-muted); margin-bottom: 8px;">📡 LIVE SYSTEM EVENT STREAM (WEBSOCKET TELEMETRY)</h3>
-            <div id="terminal-log" class="terminal-box">[SYSTEM] Initializing secure WebSocket telemetry feed from 140.245.18.162...</div>
-        </div>
-
-        <!-- API Key Generator Panel -->
-        <div class="card">
-            <h3 style="margin-top: 0; font-size: 13px;">🔑 VIP CLIENT API KEY GENERATOR</h3>
-            <label style="font-size: 11px; color: var(--text-muted);">Client Identifier Name:</label>
-            <input type="text" id="client-name-input" placeholder="e.g. VideoDownloaderWorker">
+            <h3 style="margin-top: 0; font-size: 15px; color: #78350f; margin-bottom: 12px;">🔑 VIP API KEY CONTROL</h3>
+            <input type="text" id="client-name-input" placeholder="Client Name (e.g. VideoDownloader)">
             
-            <label style="font-size: 11px; color: var(--text-muted);">Validity Duration Strategy:</label>
-            <select id="expiry-select" onchange="toggleCustomExpiryInput()">
-                <option value="0">Permanent (Unlimited Access)</option>
+            <label style="font-size: 13px; font-weight: bold; display: block; margin-bottom: 4px;">Key Validity / Expiry Duration:</label>
+            <select id="expiry-select" onchange="toggleCustomExpiry()">
+                <option value="0">Permanent (Unlimited)</option>
                 <option value="3600">1 Hour</option>
                 <option value="86400">24 Hours (1 Day)</option>
                 <option value="604800">7 Days</option>
                 <option value="custom">Custom Seconds...</option>
             </select>
-            <input type="number" id="custom-seconds-input" class="hidden" placeholder="Enter custom seconds...">
+            <input type="number" id="custom-seconds-input" class="hidden" placeholder="Enter expiry time in seconds">
 
-            <button class="btn-green" onclick="generateApiKeyAction()">Generate & Deploy Key ⚡</button>
+            <button class="btn-success" onclick="generateApiKey()">Generate API Key ⚡</button>
             <div id="generation-result" class="hidden success-box"></div>
         </div>
 
-        <!-- Active Client Vault List -->
+        <!-- Active Clients List -->
         <div class="card">
-            <h3 style="margin-top: 0; font-size: 13px;">🛡️ ACTIVE AUTHORIZED CLIENT VAULT</h3>
+            <h3 style="margin-top: 0; font-size: 15px; color: #78350f; margin-bottom: 12px;">🛡️ ACTIVE AUTHORIZED CLIENTS</h3>
             <div id="clients-list-container">
-                <p style="font-size: 12px; color: var(--text-muted);">Synchronizing active vault database...</p>
+                <p style="font-size: 13px; color: var(--muted-text);">Loading active clients...</p>
             </div>
         </div>
 
     </div>
-
 </div>
 
 <script>
     let ADMIN_KEY = localStorage.getItem("nano_admin_key") || "";
 
     if (ADMIN_KEY) {
-        verifyMasterKeySilent();
+        verifyAndOpenDashboard();
     }
 
-    async function authenticateVault() {
-        const keyVal = document.getElementById("admin-key-input").value.trim();
-        const errBox = document.getElementById("login-error");
+    async function unlockControlRoom() {
+        const keyInput = document.getElementById("admin-key-input").value.trim();
+        const errorDiv = document.getElementById("login-error");
         
-        if (!keyVal) {
-            errBox.innerText = "Master key cannot be empty.";
+        if (!keyInput) {
+            errorDiv.innerText = "Please enter the master key.";
             return;
         }
 
-        ADMIN_KEY = keyVal;
+        ADMIN_KEY = keyInput;
         try {
             const res = await fetch('/admin/keys/list', {
                 headers: { 'X-Admin-Key': ADMIN_KEY }
             });
             if (res.ok) {
                 localStorage.setItem("nano_admin_key", ADMIN_KEY);
-                activateDashboardUI();
+                showDashboard();
             } else {
-                errBox.innerText = "Access Denied: Invalid Master Admin Key.";
+                errorDiv.innerText = "Access Denied! Invalid Master Admin Key.";
                 ADMIN_KEY = "";
             }
         } catch (e) {
-            errBox.innerText = "Backend connection failed.";
+            errorDiv.innerText = "Cannot connect to Master Backend.";
         }
     }
 
-    async function verifyMasterKeySilent() {
+    async function verifyAndOpenDashboard() {
         try {
             const res = await fetch('/admin/keys/list', {
                 headers: { 'X-Admin-Key': ADMIN_KEY }
             });
             if (res.ok) {
-                activateDashboardUI();
+                showDashboard();
             } else {
-                lockMasterVault();
+                lockVault();
             }
         } catch (e) {
-            lockMasterVault();
+            lockVault();
         }
     }
 
-    function activateDashboardUI() {
+    function showDashboard() {
         document.getElementById("login-section").classList.add("hidden");
         document.getElementById("dashboard-section").classList.remove("hidden");
-        document.getElementById("auth-action-slot").innerHTML = `<button class="btn-red" onclick="lockMasterVault()">Lock Vault 🔒</button>`;
-        fetchActiveClientsList();
-        initLiveWebSocket();
+        document.getElementById("auth-action-slot").innerHTML = `<button class="btn-danger" onclick="lockVault()">Lock Vault 🔒</button>`;
+        loadActiveClients();
+        initWebSocket();
     }
 
-    function lockMasterVault() {
+    function lockVault() {
         localStorage.removeItem("nano_admin_key");
         ADMIN_KEY = "";
         document.getElementById("dashboard-section").classList.add("hidden");
@@ -316,30 +270,30 @@
         document.getElementById("admin-key-input").value = "";
     }
 
-    function toggleCustomExpiryInput() {
-        const sel = document.getElementById("expiry-select").value;
-        const customField = document.getElementById("custom-seconds-input");
-        if (sel === "custom") {
-            customField.classList.remove("hidden");
+    function toggleCustomExpiry() {
+        const val = document.getElementById("expiry-select").value;
+        const customInput = document.getElementById("custom-seconds-input");
+        if (val === "custom") {
+            customInput.classList.remove("hidden");
         } else {
-            customField.classList.add("hidden");
+            customInput.classList.add("hidden");
         }
     }
 
-    async function generateApiKeyAction() {
+    async function generateApiKey() {
         const clientName = document.getElementById("client-name-input").value.trim();
-        const expirySel = document.getElementById("expiry-select").value;
-        let expirySec = 0;
+        const expirySelect = document.getElementById("expiry-select").value;
+        let expirySeconds = 0;
 
         if (!clientName) {
-            alert("Client name is required.");
+            alert("Please enter a client name.");
             return;
         }
 
-        if (expirySel === "custom") {
-            expirySec = parseInt(document.getElementById("custom-seconds-input").value) || 0;
+        if (expirySelect === "custom") {
+            expirySeconds = parseInt(document.getElementById("custom-seconds-input").value) || 0;
         } else {
-            expirySec = parseInt(expirySel);
+            expirySeconds = parseInt(expirySelect);
         }
 
         try {
@@ -349,60 +303,60 @@
                     'Content-Type': 'application/json',
                     'X-Admin-Key': ADMIN_KEY
                 },
-                body: JSON.stringify({ client_name: clientName, expiry_seconds: expirySec })
+                body: JSON.stringify({ client_name: clientName, expiry_seconds: expirySeconds })
             });
 
             const data = await res.json();
-            const resBox = document.getElementById("generation-result");
+            const resultBox = document.getElementById("generation-result");
             if (res.ok) {
-                resBox.classList.remove("hidden");
-                resBox.innerHTML = `<strong>API Key Generated Successfully:</strong><br><code>${data.api_key}</code><br><small>Type: ${data.type}</small>`;
+                resultBox.classList.remove("hidden");
+                resultBox.innerHTML = `<strong>Success! API Key Generated:</strong><br><code>${data.api_key}</code><br><small>Type: ${data.type}</small>`;
                 document.getElementById("client-name-input").value = "";
-                fetchActiveClientsList();
-                appendTerminalLog(`[ADMIN] Generated new API key for client: ${clientName} (${data.type})`);
+                loadActiveClients();
+                appendLog(`[ADMIN] Generated API key for ${clientName}`);
             } else {
-                alert("Error: " + (data.detail || "Generation failed"));
+                alert("Error: " + (data.detail || "Failed to generate"));
             }
         } catch (e) {
-            alert("Network error during key generation.");
+            alert("Network error while generating key.");
         }
     }
 
-    async function fetchActiveClientsList() {
+    async function loadActiveClients() {
         try {
             const res = await fetch('/admin/keys/list', {
                 headers: { 'X-Admin-Key': ADMIN_KEY }
             });
             if (res.ok) {
                 const data = await res.json();
-                document.getElementById("m-stat-clients").innerText = data.total_active;
+                document.getElementById("stat-clients").innerText = data.total_active;
                 
                 const container = document.getElementById("clients-list-container");
                 if (data.active_clients.length === 0) {
-                    container.innerHTML = `<p style="font-size: 12px; color: var(--text-muted);">No active clients found in vault.</p>`;
+                    container.innerHTML = `<p style="font-size: 13px; color: var(--muted-text);">No active clients found in vault.</p>`;
                     return;
                 }
 
                 let html = "";
                 data.active_clients.forEach(client => {
                     html += `
-                        <div class="client-row">
+                        <div class="client-item">
                             <div>
-                                <strong style="color: var(--text-main);">${client.client_name}</strong><br>
-                                <small style="color: var(--text-muted);">Prefix: ${client.key_prefix} | Mode: ${client.type}</small>
+                                <strong>${client.client_name}</strong><br>
+                                <small style="color: var(--muted-text);">Prefix: ${client.key_prefix} | Type: ${client.type}</small>
                             </div>
-                            <button class="btn-red" onclick="revokeClientAction('${client.client_name}')">Revoke</button>
+                            <button class="btn-danger" onclick="revokeClient('${client.client_name}')">Revoke</button>
                         </div>
                     `;
                 });
                 container.innerHTML = html;
             }
         } catch (e) {
-            console.error("Failed to load clients list");
+            console.error("Failed to load clients");
         }
     }
 
-    async function revokeClientAction(clientName) {
+    async function revokeClient(clientName) {
         if (!confirm(`Are you sure you want to revoke access for ${clientName}?`)) return;
 
         try {
@@ -416,8 +370,8 @@
             });
 
             if (res.ok) {
-                fetchActiveClientsList();
-                appendTerminalLog(`[ADMIN] Revoked API key for client: ${clientName}`);
+                loadActiveClients();
+                appendLog(`[ADMIN] Revoked ${clientName}`);
             } else {
                 alert("Failed to revoke client.");
             }
@@ -426,44 +380,43 @@
         }
     }
 
-    function appendTerminalLog(message) {
+    function appendLog(msg) {
         const term = document.getElementById("terminal-log");
-        const timestamp = new Date().toLocaleTimeString();
-        term.innerHTML += `\n[${timestamp}] ${message}`;
+        const time = new Date().toLocaleTimeString();
+        term.innerHTML += `\n[${time}] ${msg}`;
         term.scrollTop = term.scrollHeight;
     }
 
-    function initLiveWebSocket() {
-        const proto = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-        const url = proto + window.location.host + '/ws/telemetry';
-        const ws = new WebSocket(url);
+    function initWebSocket() {
+        const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const wsUrl = protocol + window.location.host + '/ws/telemetry';
+        const ws = new WebSocket(wsUrl);
 
         ws.onopen = function() {
-            document.getElementById("ws-pulse").style.backgroundColor = "var(--neon-green)";
-            appendTerminalLog("[WS] Telemetry data stream connected successfully.");
+            document.getElementById("ws-indicator").style.backgroundColor = "#15803d";
+            appendLog("[WS] Connected to live telemetry feed.");
         };
 
         ws.onclose = function() {
-            document.getElementById("ws-pulse").style.backgroundColor = "var(--neon-red)";
-            appendTerminalLog("[WS] Connection lost. Reconnecting in 3s...");
-            setTimeout(initLiveWebSocket, 3000);
+            document.getElementById("ws-indicator").style.backgroundColor = "#b91c1c";
+            appendLog("[WS] Connection lost. Reconnecting...");
+            setTimeout(initWebSocket, 3000);
         };
 
         ws.onmessage = function(event) {
             try {
-                const payload = JSON.parse(event.data);
-                
-                if (payload.available_proxies !== undefined) {
-                    document.getElementById("m-stat-proxies").innerText = payload.available_proxies;
+                const data = JSON.parse(event.data);
+                if (data.available_proxies !== undefined) {
+                    document.getElementById("stat-proxies").innerText = data.available_proxies;
                 }
-                if (payload.hunted_count !== undefined) {
-                    document.getElementById("m-eng1-hunted").innerText = payload.hunted_count;
+                if (data.hunted_count !== undefined) {
+                    appendLog(`[HUNTER] Discovered ${data.hunted_count} raw IPs`);
                 }
-                if (payload.purged_count !== undefined) {
-                    document.getElementById("m-eng3-purged").innerText = payload.purged_count;
+                if (data.purged_count !== undefined) {
+                    document.getElementById("eng3-purged").innerText = data.purged_count;
                 }
-                if (payload.log_message) {
-                    appendTerminalLog(payload.log_message);
+                if (data.log_message) {
+                    appendLog(data.log_message);
                 }
             } catch (e) {}
         };
