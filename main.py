@@ -26,7 +26,7 @@ from core.master4_gateway import (
     close_gateway_resources, 
     pool_starvation_event, 
     LOCAL_KEY_CACHE,
-    start_background_tcp_proxy  # Handled directly from main to manage port 8080 cleanly
+    start_background_tcp_proxy  
 )
 
 logging.basicConfig(
@@ -219,7 +219,7 @@ async def proxy_supply_chain_loop():
     PROACTIVE_HUNT_INTERVAL = 300.0
     last_hunt_time = 0.0
     
-    # Smart Memory Shield Limits (12 GB Max RAM Limit, 10 GB Resume Threshold)
+    # 12 GB RAM Memory Shield Limits
     MAX_REDIS_MEMORY_BYTES = 12 * 1024 * 1024 * 1024 
     RESUME_MEMORY_THRESHOLD_BYTES = 10 * 1024 * 1024 * 1024  
 
@@ -227,13 +227,11 @@ async def proxy_supply_chain_loop():
         try:
             now = time.time()
             
-            # Check current Redis RAM usage dynamically
             memory_info = await redis_vault_proxies.info('memory')
             used_memory = memory_info.get('used_memory', 0)
             
             current_ips = await redis_vault_proxies.scard("vip_proxy_pool") or 0
             
-            # Pause engines automatically if Redis RAM reaches 12GB
             if used_memory >= MAX_REDIS_MEMORY_BYTES:
                 logging.info(f"[SUPPLY CHAIN MEMORY SHIELD] Redis RAM reached 12GB limit ({used_memory / (1024**3):.2f} GB). Pausing Hunter & Inspector engines to stand by...")
                 
@@ -360,8 +358,6 @@ async def app_lifespan(app_instance: FastAPI):
 
     task1 = asyncio.create_task(proxy_supply_chain_loop())
     task2 = asyncio.create_task(vault_maintenance_loop())
-    
-    # Start Engine 4 (TCP Proxy) cleanly on port 8080 from main
     task3 = asyncio.create_task(start_background_tcp_proxy())
     background_worker_tasks.extend([task1, task2, task3])
 
@@ -944,8 +940,8 @@ async def premium_dashboard():
             status_code=500
         )
 
+# EXCLUSIVE FIX: Mounted under /gateway only so it NEVER overrides index.html at root (/)
 app.mount("/gateway", gateway_app)
-app.include_router(gateway_app.router)
 
 if __name__ == "__main__":
     import os
@@ -953,10 +949,9 @@ if __name__ == "__main__":
     
     logging.info(f"[AUTO-HEAL] Checking and clearing Ghost Processes on ports {WEB_PORT} and {PROXY_PORT}...")
     try:
-        # Automatically clean up any stuck ghost processes on the required ports before starting
         os.system(f"fuser -k -9 {WEB_PORT}/tcp >/dev/null 2>&1")
         os.system(f"fuser -k -9 {PROXY_PORT}/tcp >/dev/null 2>&1")
-        time.sleep(1.5)  # Allow OS sufficient time to completely release port bindings
+        time.sleep(1.5)
         logging.info("[AUTO-HEAL] Ports cleared successfully. Starting server...")
     except Exception as e:
         logging.warning(f"[AUTO-HEAL] Port cleanup skipped: {e}")
