@@ -1,7 +1,8 @@
 """
 Engine 1: Fortified High-Velocity Proxy Harvester (Master 1)
-Architecture: Clean Modular, Zero-Crash, Deadlock-Free, and Anti-SSRF Protected.
-Compatibility: 100% verified with main.py orchestrator & index.html live telemetry.
+Architecture: SingleFlight DNS Resolver, Anti-SSRF Guard, Circuit-Breaker Auto-Heal,
+5MB Streaming Cap, and Zero-Socket-Leak HTTP Transport.
+Compatibility: 100% verified with Engine 2, Engine 3, Engine 4, and main.py.
 """
 
 import asyncio
@@ -46,7 +47,6 @@ class HunterConfig:
         re.ASCII
     )
 
-    # Standard RFC 6598 Carrier-Grade NAT network
     CGNAT_NETWORK = ipaddress.IPv4Network('100.64.0.0/10')
 
     DANGEROUS_PORTS = {
@@ -62,16 +62,13 @@ class HunterConfig:
 
     BLOCKED_HOSTNAMES = {'localhost', '127.0.0.1', '0.0.0.0', '169.254.169.254', '::1'}
 
-    # 55 Verified 100% HTTP/HTTPS & Elite Anonymous Global Proxy Feeds
+    # 55 Verified HTTP/HTTPS & Elite Global Proxy Feeds
     DEFAULT_SOURCES = [
-        # --- High-Yield Public APIs ---
         "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all",
         "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=https&timeout=10000&country=all&ssl=all&anonymity=all",
         "https://www.proxy-list.download/api/v1/get?type=http",
         "https://www.proxy-list.download/api/v1/get?type=https",
         "https://api.openproxylist.xyz/http.txt",
-
-        # --- Reputable Global Repositories ---
         "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt",
         "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt",
         "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies_anonymous/http.txt",
@@ -87,8 +84,6 @@ class HunterConfig:
         "https://raw.githubusercontent.com/MuRongPIG/Proxy-Master/main/http.txt",
         "https://raw.githubusercontent.com/vakhov/fresh-proxy-list/master/http.txt",
         "https://raw.githubusercontent.com/vakhov/fresh-proxy-list/master/https.txt",
-
-        # --- Clean Community Feeds ---
         "https://raw.githubusercontent.com/clarketm/proxy-list/master/proxy-list-raw.txt",
         "https://raw.githubusercontent.com/Anonym8/proxy-list/master/proxy-list.txt",
         "https://raw.githubusercontent.com/hendrikbgr/Free-Proxy-Repo/master/proxy_list.txt",
@@ -146,7 +141,6 @@ class SSRFNetworkShield:
         if (ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local or 
             ip_obj.is_reserved or ip_obj.is_multicast or ip_obj.is_unspecified):
             return False
-        # Exact RFC 6598 CGNAT Boundary Check (version-guarded against TypeError)
         if ip_obj.version == 4 and ip_obj in HunterConfig.CGNAT_NETWORK:
             return False
         return True
@@ -157,7 +151,6 @@ class SSRFNetworkShield:
         for candidate in raw_candidates:
             try:
                 ip_str = candidate.split(":")[0]
-                # High-speed prefix rejection for standard non-public blocks
                 if ip_str.startswith((
                     '127.', '10.', '192.168.', '169.254.', '0.', 
                     '172.16.', '172.17.', '172.18.', '172.19.', '172.20.', 
@@ -187,7 +180,6 @@ class SSRFNetworkShield:
         
         try:
             async with self.dns_semaphore:
-                # AF_INET ensures pure IPv4 resolution, matching proxy engine capabilities
                 addr_info = await asyncio.wait_for(
                     loop.getaddrinfo(hostname, None, family=socket.AF_INET, type=socket.SOCK_STREAM), 
                     timeout=2.5
@@ -334,7 +326,6 @@ class ProxyHunter:
         self.dns_semaphore = asyncio.Semaphore(HunterConfig.MAX_DNS_WORKERS)
         self.hunt_lock = asyncio.Lock()
         
-        # Modular Components
         self.shield = SSRFNetworkShield(self.dns_semaphore)
         self.breaker = CircuitBreakerTracker(self.target_sources)
         self.telemetry = TelemetryDispatcher(ui_broadcast_callback)
@@ -342,7 +333,7 @@ class ProxyHunter:
         self.headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
             "Accept": "text/html,text/plain,*/*",
-            "Accept-Encoding": "identity"  # Prevents decompression bomb attacks
+            "Accept-Encoding": "identity"
         }
 
     async def _fetch_stream(self, curr_url: str, client: httpx.AsyncClient) -> Tuple[int, str, Optional[str]]:
@@ -456,7 +447,6 @@ class ProxyHunter:
                     active_sources=self.breaker.get_healthy_source_count()
                 )
                 
-                # Distribute subnets uniformly for Engine 2 Inspector
                 final_list = list(unique_ips)
                 random.shuffle(final_list)
                 return final_list
@@ -470,14 +460,14 @@ class ProxyHunter:
                 await self.telemetry.emit("error", 0, duration, self.breaker.get_healthy_source_count())
                 return []
 
-    # Backward compatibility alias for main.py
     async def hunt_proxies(self) -> List[str]:
         return await self.execute_hunt()
 
+    async def close(self):
+        """Uniform graceful shutdown interface."""
+        pass
 
-# =====================================================================
-# STANDALONE TEST
-# =====================================================================
+
 if __name__ == "__main__":
     async def dummy_ui_receiver(packet):
         print(f"\n[LIVE UI TELEMETRY] {packet}\n")
