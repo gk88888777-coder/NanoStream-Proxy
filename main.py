@@ -21,7 +21,13 @@ from typing import Dict, Any, List, Optional
 from core.master1_hunter import ProxyHunter
 from core.master2_inspector import ProxyInspector
 from core.master3_vault_doctor import VaultDoctor
-from core.master4_gateway import app as gateway_app, close_gateway_resources, pool_starvation_event, LOCAL_KEY_CACHE
+from core.master4_gateway import (
+    app as gateway_app, 
+    close_gateway_resources, 
+    pool_starvation_event, 
+    LOCAL_KEY_CACHE,
+    start_background_tcp_proxy  # <-- Added to handle 8080 properly from main
+)
 
 logging.basicConfig(
     level=logging.INFO, 
@@ -343,7 +349,10 @@ async def app_lifespan(app_instance: FastAPI):
 
     task1 = asyncio.create_task(proxy_supply_chain_loop())
     task2 = asyncio.create_task(vault_maintenance_loop())
-    background_worker_tasks.extend([task1, task2])
+    
+    # --- CRITICAL FIX: Ensure Engine 4 (TCP Proxy) starts cleanly on 8080 from main ---
+    task3 = asyncio.create_task(start_background_tcp_proxy())
+    background_worker_tasks.extend([task1, task2, task3])
 
     yield
 
