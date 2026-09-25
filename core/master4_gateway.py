@@ -31,7 +31,7 @@ logging.basicConfig(
 )
 
 BASE_URL = os.environ.get("BASE_URL", "https://nanostream4x.duckdns.org").rstrip('/')
-PROXY_PORT = int(os.environ.get("PROXY_PORT", 8000))
+PROXY_PORT = int(os.environ.get("PROXY_PORT", 8080))
 PROXY_DOMAIN = urlparse(BASE_URL).hostname or "nanostream4x.duckdns.org"
 
 SHARED_SSL_CONTEXT = ssl.create_default_context()
@@ -920,4 +920,4 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("core.master4_gateway:app", host="0.0.0.0", port=8000, reload=False, workers=1)
+    uvicorn.run("core.master4_gateway:app", host="0.0.0.0", port=8080, reload=False, workers=1)
