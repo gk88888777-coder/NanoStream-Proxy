@@ -245,7 +245,7 @@
                     </div>
                     
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <input type="text" id="ent-server-ip" placeholder="Company Backend Server IP (Optional, Auto-Locks on 1st use)" class="bg-white border border-blue-500/30 rounded-xl px-3 py-2 text-xs mono focus:outline-none">
+                        <input type="text" id="ent-server-ip" placeholder="Company Backend Server IP (Optional, Cluster Ready)" class="bg-white border border-blue-500/30 rounded-xl px-3 py-2 text-xs mono focus:outline-none">
                         <div class="flex items-center gap-2 bg-white border border-blue-500/30 rounded-xl px-3 py-2">
                             <span class="text-[11px] mono text-blue-950 font-bold whitespace-nowrap">Capacity:</span>
                             <select id="ent-allocated-rps" class="w-full bg-transparent text-xs mono font-bold text-blue-950 focus:outline-none">
@@ -316,7 +316,7 @@
                     </div>
                     
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <input type="text" id="std-bind-ip" placeholder="Device / Tool IP (Optional: Auto-Locks on 1st use)" class="w-full bg-white border border-amber-900/20 rounded-xl px-3 py-2 text-xs mono focus:outline-none">
+                        <input type="text" id="std-bind-ip" placeholder="Device / Tool IP (Optional: Cluster Ready)" class="w-full bg-white border border-amber-900/20 rounded-xl px-3 py-2 text-xs mono focus:outline-none">
                         <input type="text" id="std-custom-key" placeholder="Custom API Key (Optional)" class="bg-white border border-amber-900/20 rounded-xl px-3 py-2 text-xs mono focus:outline-none">
                     </div>
 
@@ -420,7 +420,7 @@
                 <div class="flex justify-between items-center">
                     <span class="text-slate-500">Server IP Binding:</span>
                     <div class="flex items-center gap-1.5">
-                        <span class="font-bold text-blue-900" id="dossier-server-ip">Unbound</span>
+                        <span class="font-bold text-blue-900" id="dossier-server-ip">Unbound (Cluster Ready)</span>
                         <button id="btn-dossier-reset-ip" onclick="resetDossierIp()" class="px-2 py-0.5 bg-blue-100 hover:bg-blue-200 text-blue-900 rounded text-[9px] font-bold">Reset IP</button>
                     </div>
                 </div>
@@ -432,14 +432,21 @@
 
             <div class="space-y-2 pt-1">
                 <div>
-                    <span class="text-[10px] text-slate-500 font-bold block mb-1">🔗 Stream Relay URL (for Downloader / IPTV):</span>
+                    <span class="text-[10px] text-slate-500 font-bold block mb-1">🔗 Stream Relay URL (for IPTV / Web Player):</span>
                     <div class="flex gap-2">
                         <input type="text" id="dossier-stream-url" readonly class="flex-1 bg-white border border-blue-500/20 rounded-xl px-3 py-1.5 text-[11px] mono select-all">
                         <button onclick="copyKeyText(document.getElementById('dossier-stream-url').value, this)" class="px-3 py-1.5 bg-amber-800 hover:bg-amber-900 text-white font-bold rounded-xl shadow-sm">Copy</button>
                     </div>
                 </div>
                 <div>
-                    <span class="text-[10px] text-slate-500 font-bold block mb-1">📋 Terminal Command:</span>
+                    <span class="text-[10px] text-slate-500 font-bold block mb-1">⚡ yt-dlp Command (Automated Downloader):</span>
+                    <div class="flex gap-2">
+                        <input type="text" id="dossier-ytdlp-cmd" readonly class="flex-1 bg-white border border-blue-500/20 rounded-xl px-3 py-1.5 text-[11px] mono select-all">
+                        <button onclick="copyKeyText(document.getElementById('dossier-ytdlp-cmd').value, this)" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-sm">Copy</button>
+                    </div>
+                </div>
+                <div>
+                    <span class="text-[10px] text-slate-500 font-bold block mb-1">📋 Terminal / Software API Command:</span>
                     <div class="flex gap-2">
                         <input type="text" id="dossier-curl-cmd" readonly class="flex-1 bg-white border border-blue-500/20 rounded-xl px-3 py-1.5 text-[11px] mono select-all">
                         <button onclick="copyKeyText(document.getElementById('dossier-curl-cmd').value, this)" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-sm">Copy</button>
@@ -503,7 +510,7 @@
                 <div class="flex justify-between items-center">
                     <span class="text-slate-500">Device IP Lock:</span>
                     <div class="flex items-center gap-1.5">
-                        <span class="font-bold text-blue-900" id="std-dossier-server-ip">Unbound</span>
+                        <span class="font-bold text-blue-900" id="std-dossier-server-ip">Unbound (Cluster Ready)</span>
                         <button id="btn-std-dossier-reset-ip" onclick="resetStandardDossierIp()" class="px-2 py-0.5 bg-amber-200 hover:bg-amber-300 text-amber-950 rounded text-[9px] font-bold">Reset IP</button>
                     </div>
                 </div>
@@ -522,7 +529,14 @@
                     </div>
                 </div>
                 <div>
-                    <span class="text-[10px] text-slate-600 font-bold block mb-1">📋 Terminal Command:</span>
+                    <span class="text-[10px] text-slate-500 font-bold block mb-1">⚡ yt-dlp Command:</span>
+                    <div class="flex gap-2">
+                        <input type="text" id="std-dossier-ytdlp-cmd" readonly class="flex-1 bg-white border border-amber-900/20 rounded-lg px-2.5 py-1.5 text-[11px] mono select-all">
+                        <button onclick="copyKeyText(document.getElementById('std-dossier-ytdlp-cmd').value, this)" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-sm">Copy</button>
+                    </div>
+                </div>
+                <div>
+                    <span class="text-[10px] text-slate-600 font-bold block mb-1">📋 Terminal / Software API Command:</span>
                     <div class="flex gap-2">
                         <input type="text" id="std-dossier-curl-cmd" readonly class="flex-1 bg-white border border-amber-900/20 rounded-lg px-2.5 py-1.5 text-[11px] mono select-all">
                         <button onclick="copyKeyText(document.getElementById('std-dossier-curl-cmd').value, this)" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-sm">Copy</button>
@@ -586,14 +600,21 @@
             </div>
             <div class="space-y-2 pt-2 border-t border-amber-900/10">
                 <div>
-                    <span class="text-[10px] text-slate-600 font-bold block mb-1">🔗 Stream Relay URL:</span>
+                    <span class="text-[10px] text-slate-600 font-bold block mb-1">🔗 Stream Relay URL (IPTV):</span>
                     <div class="flex gap-2">
                         <input type="text" id="succ-stream-url" readonly class="flex-1 bg-white border border-amber-900/20 rounded-lg px-2.5 py-1.5 text-[11px] mono select-all">
                         <button onclick="copyKeyText(document.getElementById('succ-stream-url').value, this)" class="px-3 py-1.5 bg-amber-800 text-white font-bold rounded-lg shadow-sm">Copy</button>
                     </div>
                 </div>
                 <div>
-                    <span class="text-[10px] text-slate-600 font-bold block mb-1">📋 Terminal Command:</span>
+                    <span class="text-[10px] text-slate-600 font-bold block mb-1">⚡ yt-dlp Command:</span>
+                    <div class="flex gap-2">
+                        <input type="text" id="succ-ytdlp-cmd" readonly class="flex-1 bg-white border border-amber-900/20 rounded-lg px-2.5 py-1.5 text-[11px] mono select-all">
+                        <button onclick="copyKeyText(document.getElementById('succ-ytdlp-cmd').value, this)" class="px-3 py-1.5 bg-indigo-600 text-white font-bold rounded-lg shadow-sm">Copy</button>
+                    </div>
+                </div>
+                <div>
+                    <span class="text-[10px] text-slate-600 font-bold block mb-1">📋 Terminal / Software API Command:</span>
                     <div class="flex gap-2">
                         <input type="text" id="succ-curl-cmd" readonly class="flex-1 bg-white border border-amber-900/20 rounded-lg px-2.5 py-1.5 text-[11px] mono select-all">
                         <button onclick="copyKeyText(document.getElementById('succ-curl-cmd').value, this)" class="px-3 py-1.5 bg-blue-600 text-white font-bold rounded-lg shadow-sm">Copy</button>
@@ -1065,10 +1086,11 @@
             document.getElementById('dossier-data-metered').innerText = c.data_usage || "0.0 MB";
             document.getElementById('dossier-capacity').innerText = c.allocated_rps || "10,000 req/s";
             document.getElementById('dossier-key').innerText = c.full_key;
-            document.getElementById('dossier-server-ip').innerText = c.bound_ip || "Unbound (Auto-Bind on 1st use)";
+            document.getElementById('dossier-server-ip').innerText = c.bound_ip || "Unbound (Cluster Ready)";
             document.getElementById('dossier-expiry-dt').innerText = formatTimestampToLocal(c.target_timestamp);
 
             document.getElementById('dossier-stream-url').value = c.stream_url;
+            document.getElementById('dossier-ytdlp-cmd').value = c.ytdlp_cmd || `yt-dlp --add-header "x-api-key: ${c.full_key}" "${window.location.origin}/gateway/proxy?target_url=VIDEO_URL"`;
             document.getElementById('dossier-curl-cmd').value = c.curl_cmd;
 
             document.getElementById('btn-dossier-cal').onclick = () => {
@@ -1084,7 +1106,7 @@
             };
 
             const resetIpBtn = document.getElementById('btn-dossier-reset-ip');
-            if (c.bound_ip && c.bound_ip !== "Unbound (Auto-Bind on 1st use)" && c.bound_ip !== "Unbound (Auto-Bind to Server)") {
+            if (c.bound_ip && c.bound_ip.toLowerCase() !== "unbound (cluster ready)" && !c.bound_ip.toLowerCase().includes("unbound")) {
                 resetIpBtn.classList.remove('hidden');
             } else {
                 resetIpBtn.classList.add('hidden');
@@ -1126,10 +1148,11 @@
             document.getElementById('std-dossier-total-requests').innerText = c.total_requests_display || "0";
             document.getElementById('std-dossier-data-metered').innerText = c.data_usage || "0.0 MB";
             document.getElementById('std-dossier-key').innerText = c.full_key;
-            document.getElementById('std-dossier-server-ip').innerText = c.bound_ip || "Unbound (Auto-Bind on 1st use)";
+            document.getElementById('std-dossier-server-ip').innerText = c.bound_ip || "Unbound (Cluster Ready)";
             document.getElementById('std-dossier-expiry-dt').innerText = formatTimestampToLocal(c.target_timestamp);
 
             document.getElementById('std-dossier-stream-url').value = c.stream_url;
+            document.getElementById('std-dossier-ytdlp-cmd').value = c.ytdlp_cmd || `yt-dlp --add-header "x-api-key: ${c.full_key}" "${window.location.origin}/gateway/proxy?target_url=VIDEO_URL"`;
             document.getElementById('std-dossier-curl-cmd').value = c.curl_cmd;
 
             document.getElementById('btn-std-dossier-cal').onclick = () => {
@@ -1145,7 +1168,7 @@
             };
 
             const resetIpBtn = document.getElementById('btn-std-dossier-reset-ip');
-            if (c.bound_ip && c.bound_ip !== "Unbound (Auto-Bind on 1st use)") {
+            if (c.bound_ip && c.bound_ip.toLowerCase() !== "unbound (cluster ready)" && !c.bound_ip.toLowerCase().includes("unbound")) {
                 resetIpBtn.classList.remove('hidden');
             } else {
                 resetIpBtn.classList.add('hidden');
@@ -1514,6 +1537,7 @@
                     document.getElementById('succ-country').innerText = data.country;
                     document.getElementById('succ-key').innerText = data.api_key;
                     document.getElementById('succ-stream-url').value = data.stream_url;
+                    document.getElementById('succ-ytdlp-cmd').value = data.ytdlp_cmd;
                     document.getElementById('succ-curl-cmd').value = data.curl_cmd;
                     document.getElementById('key-success-modal').classList.remove('hidden');
 
@@ -1604,6 +1628,7 @@
                     document.getElementById('succ-country').innerText = data.country;
                     document.getElementById('succ-key').innerText = data.api_key;
                     document.getElementById('succ-stream-url').value = data.stream_url;
+                    document.getElementById('succ-ytdlp-cmd').value = data.ytdlp_cmd;
                     document.getElementById('succ-curl-cmd').value = data.curl_cmd;
                     document.getElementById('key-success-modal').classList.remove('hidden');
 
@@ -1652,7 +1677,7 @@
                 const data = await response.json();
                 if (response.ok) {
                     fetchActiveKeys();
-                    alert("✅ IP Lock cleared successfully!");
+                    alert("✅ IP Lock cleared successfully! Unrestricted and cluster-ready.");
                 } else {
                     alert(`❌ Failed to reset IP: ${data.detail || 'Server error'}`);
                 }
