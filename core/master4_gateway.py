@@ -3,16 +3,18 @@ import httpx
 import time
 import os
 import sys
+import ssl
 import logging
 import ipaddress
 import warnings
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any, AsyncIterator
 from urllib.parse import urlparse, unquote
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, Response
 import redis.asyncio as redis
 from cryptography.fernet import Fernet, InvalidToken
+from contextlib import asynccontextmanager
 
 warnings.filterwarnings('ignore', category=UserWarning, module='httpx')
 
@@ -25,15 +27,9 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
-app = FastAPI(title="NanoStream 4X Hyper-Scale Gateway", version="21.0.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+SHARED_SSL_CONTEXT = ssl.create_default_context()
+SHARED_SSL_CONTEXT.check_hostname = False
+SHARED_SSL_CONTEXT.verify_mode = ssl.CERT_NONE
 
 DEFAULT_FIXED_KEY = "W3z9Lp7m1n4b6v8c0x3z5l7j9h1g3f5d7s9a2p4q6w8="
 ENCRYPTION_KEY = os.environ.get("PROXY_ENCRYPTION_KEY", DEFAULT_FIXED_KEY)
@@ -48,14 +44,16 @@ REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
 REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD", None)
 
 MAX_SOCKET_CONNECTIONS = int(os.environ.get("MAX_SOCKET_CONNECTIONS", 4000))
-DATA_FLUSH_THRESHOLD_BYTES = int(os.environ.get("DATA_FLUSH_THRESHOLD_BYTES", 1048576))  # 1MB
+DATA_FLUSH_THRESHOLD_BYTES = int(os.environ.get("DATA_FLUSH_THRESHOLD_BYTES", 1048576))
 CACHE_TTL = float(os.environ.get("KEY_CACHE_TTL_SECONDS", 10.0))
 
 redis_pool_proxies = redis.ConnectionPool(
-    host=REDIS_HOST, port=REDIS_PORT, db=0, password=REDIS_PASSWORD, max_connections=MAX_SOCKET_CONNECTIONS
+    host=REDIS_HOST, port=REDIS_PORT, db=0, password=REDIS_PASSWORD, 
+    max_connections=MAX_SOCKET_CONNECTIONS, socket_timeout=5.0, socket_connect_timeout=3.0, retry_on_timeout=True
 )
 redis_pool_keys = redis.ConnectionPool(
-    host=REDIS_HOST, port=REDIS_PORT, db=1, password=REDIS_PASSWORD, decode_responses=True, max_connections=MAX_SOCKET_CONNECTIONS
+    host=REDIS_HOST, port=REDIS_PORT, db=1, password=REDIS_PASSWORD, decode_responses=True, 
+    max_connections=MAX_SOCKET_CONNECTIONS, socket_timeout=5.0, socket_connect_timeout=3.0, retry_on_timeout=True
 )
 
 redis_vault_proxies = redis.Redis(connection_pool=redis_pool_proxies)
@@ -63,7 +61,11 @@ redis_vault_keys = redis.Redis(connection_pool=redis_pool_keys)
 
 pool_starvation_event = asyncio.Event()
 LOCAL_KEY_CACHE: Dict[str, Dict[str, Any]] = {}
+TARGET_DNS_CACHE: Dict[str, Tuple[bool, float]] = {}
 TELEMETRY_SAMPLE_COUNTER = 0
+
+CGNAT_NETWORK = ipaddress.IPv4Network('100.64.0.0/10')
+BLOCKED_INTERNAL_NAMES = {'localhost', 'internal', 'metadata.google.internal', '0.0.0.0', '127.0.0.1', '::1', '169.254.169.254'}
 
 async def close_gateway_resources():
     try:
@@ -71,9 +73,25 @@ async def close_gateway_resources():
         await redis_pool_proxies.disconnect()
         await redis_vault_keys.aclose()
         await redis_pool_keys.disconnect()
-        logging.info("Gateway Redis resources cleanly closed.")
+        logging.info("[ENGINE 4] Gateway Redis connection pools closed cleanly.")
     except Exception as ex:
-        logging.error(f"Error closing gateway Redis pools: {ex}")
+        logging.error(f"[ENGINE 4] Error closing gateway Redis pools: {ex}")
+
+@asynccontextmanager
+async def gateway_lifespan(app_instance: FastAPI):
+    logging.info("[ENGINE 4] NanoStream Hyper-Scale Gateway operational.")
+    yield
+    await close_gateway_resources()
+
+app = FastAPI(title="NanoStream 4X Hyper-Scale Gateway", version="21.0.0", lifespan=gateway_lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def get_real_client_ip(request: Request) -> str:
     real_ip = request.headers.get("x-real-ip")
@@ -88,7 +106,7 @@ async def dispatch_gateway_telemetry(status: str, client_slot: str, target_domai
     global TELEMETRY_SAMPLE_COUNTER
     TELEMETRY_SAMPLE_COUNTER += 1
     
-    if TELEMETRY_SAMPLE_COUNTER % 25 != 0 and status == "tunnel_established":
+    if TELEMETRY_SAMPLE_COUNTER % 20 != 0 and status == "tunnel_established":
         return
 
     ui_broadcast = getattr(app.state, "ui_broadcast", None)
@@ -106,17 +124,26 @@ async def dispatch_gateway_telemetry(status: str, client_slot: str, target_domai
         }
         try:
             if asyncio.iscoroutinefunction(ui_broadcast):
-                await ui_broadcast(payload)
+                await asyncio.wait_for(ui_broadcast(payload), timeout=1.5)
             else:
-                asyncio.create_task(ui_broadcast(payload))
+                ui_broadcast(payload)
         except Exception:
             pass
-
-BLOCKED_INTERNAL_NAMES = {'localhost', 'internal', 'metadata.google.internal', '0.0.0.0', '127.0.0.1', '::1', '169.254.169.254'}
 
 async def is_forbidden_ip_or_host(hostname: str) -> bool:
     if not hostname or hostname in BLOCKED_INTERNAL_NAMES:
         return True
+
+    now = time.time()
+    if hostname in TARGET_DNS_CACHE:
+        cached_result, exp_time = TARGET_DNS_CACHE[hostname]
+        if now < exp_time:
+            return cached_result
+        else:
+            TARGET_DNS_CACHE.pop(hostname, None)
+
+    if len(TARGET_DNS_CACHE) > 5000:
+        TARGET_DNS_CACHE.clear()
 
     try:
         ascii_hostname = hostname.encode('idna').decode('ascii')
@@ -125,26 +152,33 @@ async def is_forbidden_ip_or_host(hostname: str) -> bool:
 
     try:
         ip = ipaddress.ip_address(ascii_hostname)
-        if ip.is_unspecified or ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
-            return True
-        return False
+        is_bad = (ip.is_unspecified or ip.is_private or ip.is_loopback or 
+                  ip.is_link_local or ip.is_reserved or ip.is_multicast or 
+                  (ip.version == 4 and ip in CGNAT_NETWORK))
+        TARGET_DNS_CACHE[hostname] = (is_bad, now + 300.0)
+        return is_bad
     except ValueError:
         pass
 
     if ascii_hostname.endswith(('.local', '.internal', '.localhost')):
+        TARGET_DNS_CACHE[hostname] = (True, now + 300.0)
         return True
 
     try:
         loop = asyncio.get_running_loop()
-        addr_info = await asyncio.wait_for(loop.getaddrinfo(ascii_hostname, None), timeout=3.0)
+        addr_info = await asyncio.wait_for(loop.getaddrinfo(ascii_hostname, None), timeout=2.5)
         for _, _, _, _, sockaddr in addr_info:
             resolved_ip = ipaddress.ip_address(sockaddr[0])
-            if resolved_ip.is_unspecified or resolved_ip.is_private or resolved_ip.is_loopback or resolved_ip.is_link_local:
+            if (resolved_ip.is_unspecified or resolved_ip.is_private or 
+                resolved_ip.is_loopback or resolved_ip.is_link_local or 
+                resolved_ip.is_reserved or resolved_ip.is_multicast or 
+                (resolved_ip.version == 4 and resolved_ip in CGNAT_NETWORK)):
+                TARGET_DNS_CACHE[hostname] = (True, now + 300.0)
                 return True
+        TARGET_DNS_CACHE[hostname] = (False, now + 300.0)
+        return False
     except Exception:
         return True
-
-    return False
 
 def smart_decode_target_url(raw_url: str) -> str:
     clean_url = raw_url.strip()
@@ -197,22 +231,25 @@ def sanitize_headers(original_headers: dict) -> dict:
     safe_headers = dict(original_headers)
     strip_tags = [
         'host', 'x-forwarded-for', 'x-real-ip', 'cf-connecting-ip', 'via',
-        'x-admin-key', 'x-api-key', 'x-target-url', 'x-session-id', 'content-length'
+        'x-admin-key', 'x-api-key', 'x-target-url', 'x-session-id', 'content-length',
+        'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'upgrade'
     ]
     for tag in strip_tags:
         safe_headers.pop(tag, None)
     
     if not safe_headers.get('user-agent'):
-        safe_headers['User-Agent'] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+        safe_headers['User-Agent'] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     
     safe_headers['Accept-Encoding'] = 'identity'
     return safe_headers
 
 async def proxy_stream_generator(client: httpx.AsyncClient, response: httpx.Response, request: Request, auth_key: Optional[str] = None):
     pending_flush = 0
+    chunk_count = 0
     try:
         async for chunk in response.aiter_bytes(chunk_size=65536):
-            if await request.is_disconnected():
+            chunk_count += 1
+            if chunk_count % 16 == 0 and await request.is_disconnected():
                 break
                 
             chunk_len = len(chunk)
@@ -245,19 +282,35 @@ async def proxy_stream_generator(client: httpx.AsyncClient, response: httpx.Resp
             except Exception:
                 pass
 
-async def fetch_single_valid_proxy(session_id: Optional[str] = None) -> Tuple[Optional[str], Optional[bytes]]:
+async def purge_dead_proxy_everywhere(raw_token_bytes: Optional[bytes], raw_ip_port: Optional[str]):
+    try:
+        async with redis_vault_proxies.pipeline(transaction=False) as pipe:
+            if raw_token_bytes:
+                pipe.srem("vip_proxy_pool", raw_token_bytes)
+            if raw_ip_port:
+                clean = raw_ip_port.replace("http://", "").replace("https://", "").replace("socks5://", "").strip()
+                pipe.srem("vip_proxy_ips", clean.encode('utf-8'))
+            await pipe.execute()
+    except Exception as e:
+        logging.error(f"[ENGINE 4] Error during synchronized dead proxy purge: {e}")
+
+async def fetch_single_valid_proxy(session_id: Optional[str] = None) -> Tuple[Optional[str], Optional[bytes], Optional[str]]:
     if session_id:
-        raw_pinned = await redis_vault_proxies.get(f"session_proxy:{session_id}")
-        if raw_pinned:
-            pinned_str = raw_pinned.decode('utf-8') if isinstance(raw_pinned, bytes) else raw_pinned
-            return pinned_str, None
+        cached_session_data = await redis_vault_proxies.get(f"session_proxy:{session_id}")
+        if cached_session_data:
+            try:
+                decrypted_url, raw_token_hex, clean_ip = cached_session_data.decode('utf-8').split("|")
+                token_bytes = bytes.fromhex(raw_token_hex) if raw_token_hex != "none" else None
+                return decrypted_url, token_bytes, clean_ip
+            except Exception:
+                pass
 
     for _ in range(5):
         try:
             raw_ip_member = await redis_vault_proxies.srandmember("vip_proxy_pool")
             if not raw_ip_member:
                 pool_starvation_event.set()
-                return None, None
+                return None, None, None
             
             raw_bytes = raw_ip_member.encode('utf-8') if isinstance(raw_ip_member, str) else raw_ip_member
             try:
@@ -266,18 +319,21 @@ async def fetch_single_valid_proxy(session_id: Optional[str] = None) -> Tuple[Op
                 decrypted = raw_bytes.decode('utf-8', errors='ignore').strip(' "\'\t\r\n')
 
             if ":" in decrypted:
+                clean_ip_port = decrypted
                 if not (decrypted.startswith("http://") or decrypted.startswith("https://") or decrypted.startswith("socks5://")):
                     decrypted = f"http://{decrypted}"
                 
                 if session_id:
-                    await redis_vault_proxies.setex(f"session_proxy:{session_id}", 180, decrypted)
+                    token_hex = raw_bytes.hex() if raw_bytes else "none"
+                    session_payload = f"{decrypted}|{token_hex}|{clean_ip_port}"
+                    await redis_vault_proxies.setex(f"session_proxy:{session_id}", 180, session_payload)
 
-                return decrypted, raw_bytes
+                return decrypted, raw_bytes, clean_ip_port
         except Exception:
             continue
             
     pool_starvation_event.set()
-    return None, None
+    return None, None, None
 
 def extract_clean_target_url(request: Request, raw_target_param: Optional[str], raw_auth_key: Optional[str]) -> str:
     header_url = request.headers.get("x-target-url") or request.headers.get("X-Target-URL")
@@ -292,20 +348,14 @@ def extract_clean_target_url(request: Request, raw_target_param: Optional[str], 
         target_marker = "url="
 
     if target_marker:
-        candidate = raw_query.split(target_marker, 1)[1]
+        parts = raw_query.split(target_marker, 1)
+        candidate = parts[1]
+        
         if raw_auth_key:
             for k in [raw_auth_key, unquote(raw_auth_key)]:
-                for prefix in [f"&key={k}", f"&api_key={k}"]:
-                    if candidate.endswith(prefix):
-                        candidate = candidate[:-len(prefix)]
-                        break
-
-        session_id = request.query_params.get("session") or request.query_params.get("session_id")
-        if session_id:
-            for prefix in [f"&session={session_id}", f"&session_id={session_id}"]:
-                if candidate.endswith(prefix):
-                    candidate = candidate[:-len(prefix)]
-                    break
+                for pattern in [f"&key={k}", f"&api_key={k}", f"key={k}&", f"api_key={k}&"]:
+                    if pattern in candidate:
+                        candidate = candidate.replace(pattern, "")
 
         if candidate:
             return smart_decode_target_url(candidate)
@@ -330,6 +380,9 @@ async def get_cached_client_profile(x_api_key: str) -> Tuple[Optional[str], str,
     if cached and (now - cached['cached_at']) < cached.get('ttl_window', CACHE_TTL):
         return cached['name'], cached['tier'], cached['max_rps'], cached['bound_ip']
 
+    if len(LOCAL_KEY_CACHE) > 50000:
+        LOCAL_KEY_CACHE.clear()
+
     pipe = redis_vault_keys.pipeline()
     pipe.get(f"api_key:{x_api_key}")
     pipe.get(f"api_key_tier:{x_api_key}")
@@ -349,9 +402,9 @@ async def get_cached_client_profile(x_api_key: str) -> Tuple[Optional[str], str,
         return None, "standard", 0, None
 
     try:
-        max_rps = int(raw_rps) if raw_rps is not None else (10000 if tier == "enterprise" else 15)
+        max_rps = int(raw_rps) if raw_rps is not None else (10000 if tier == "enterprise" else 25)
     except ValueError:
-        max_rps = 10000 if tier == "enterprise" else 15
+        max_rps = 10000 if tier == "enterprise" else 25
 
     ttl_window = min(CACHE_TTL, ttl) if (ttl and ttl > 0) else CACHE_TTL
 
@@ -429,7 +482,7 @@ async def gateway_proxy_handler(
             logging.critical(f"BRUTE-FORCE ALERT: IP {client_ip} banned after {fails} wrong attempts.")
             raise HTTPException(status_code=403, detail="Forbidden: Too many invalid attempts. Auto-blocked.")
 
-        await dispatch_gateway_telemetry("auth_failed", "Unknown Hacker", "N/A", time.time() - start_time, 401)
+        await dispatch_gateway_telemetry("auth_failed", "Unknown Client", "N/A", time.time() - start_time, 401)
         raise HTTPException(status_code=401, detail="Unauthorized: Invalid API Key.")
 
     background_tasks.add_task(redis_vault_keys.incr, f"request_count:{x_api_key}")
@@ -438,13 +491,18 @@ async def gateway_proxy_handler(
 
     if not is_master_passport:
         if not bound_ip:
-            await redis_vault_keys.set(f"api_key_ip:{x_api_key}", client_ip)
-            ttl = await redis_vault_keys.ttl(f"api_key:{x_api_key}")
-            if ttl and ttl > 0:
-                await redis_vault_keys.expire(f"api_key_ip:{x_api_key}", ttl)
-            LOCAL_KEY_CACHE.pop(x_api_key, None)
-            logging.info(f"[{tier.upper()} LOCK] Client '{client_slot_name}' auto-bound to IP: {client_ip}")
-        elif bound_ip != client_ip:
+            was_set = await redis_vault_keys.set(f"api_key_ip:{x_api_key}", client_ip, nx=True)
+            if was_set:
+                ttl = await redis_vault_keys.ttl(f"api_key:{x_api_key}")
+                if ttl and ttl > 0:
+                    await redis_vault_keys.expire(f"api_key_ip:{x_api_key}", ttl)
+                if x_api_key in LOCAL_KEY_CACHE:
+                    LOCAL_KEY_CACHE[x_api_key]['bound_ip'] = client_ip
+                logging.info(f"[{tier.upper()} LOCK] Client '{client_slot_name}' auto-bound to IP: {client_ip}")
+            else:
+                bound_ip = await redis_vault_keys.get(f"api_key_ip:{x_api_key}")
+
+        if bound_ip and bound_ip != client_ip:
             error_prefix = "Enterprise Server" if tier == "enterprise" else "Device"
             raise HTTPException(
                 status_code=403, 
@@ -455,62 +513,60 @@ async def gateway_proxy_handler(
         if tier == "enterprise":
             if allocated_rps > 0:
                 rate_key = f"b2b_rps:{x_api_key}:{current_second}"
-                pipe = redis_vault_keys.pipeline()
-                pipe.incr(rate_key)
-                pipe.expire(rate_key, 2)
-                results = await pipe.execute()
-                if results[0] > allocated_rps:
+                count = await redis_vault_keys.incr(rate_key)
+                if count == 1:
+                    await redis_vault_keys.expire(rate_key, 2)
+                if count > allocated_rps:
                     raise HTTPException(status_code=429, detail=f"Too Many Requests: Enterprise contracted quota reached ({allocated_rps:,} req/sec).")
         else:
-            std_limit = allocated_rps if allocated_rps > 0 else 15
+            std_limit = allocated_rps if allocated_rps > 0 else 25
             rate_key = f"std_rps:{x_api_key}:{current_second}"
-            pipe = redis_vault_keys.pipeline()
-            pipe.incr(rate_key)
-            pipe.expire(rate_key, 2)
-            results = await pipe.execute()
-            if results[0] > std_limit:
+            count = await redis_vault_keys.incr(rate_key)
+            if count == 1:
+                await redis_vault_keys.expire(rate_key, 2)
+            
+            if count > (std_limit * 3):
                 await redis_vault_keys.setex(f"auto_blocked_ip:{client_ip}", 900, "std_flood_exceeded")
-                raise HTTPException(status_code=403, detail=f"Forbidden: Rate limit exceeded (Max {std_limit} req/sec). Quarantined for 15 minutes.")
+                raise HTTPException(status_code=403, detail=f"Forbidden: Heavy attack detected. IP Quarantined for 15 minutes.")
+            elif count > std_limit:
+                raise HTTPException(status_code=429, detail=f"Too Many Requests: Standard quota exceeded (Max {std_limit} req/sec). Slow down.")
 
     resolved_raw_url = extract_clean_target_url(request, target_url, raw_key)
     final_target_url, target_domain = await sanitize_and_validate_target_url(resolved_raw_url)
     session_id = request.headers.get("x-session-id") or request.query_params.get("session")
 
-    request_body = None
-    if request.method not in ["GET", "HEAD", "OPTIONS"]:
-        try:
-            request_body = await request.body()
-        except Exception:
-            request_body = None
-
+    request_content = request.stream() if request.method in ["POST", "PUT", "PATCH"] else None
     camouflaged_headers = sanitize_headers(request.headers)
-    SAFE_TIMEOUT = httpx.Timeout(connect=8.0, read=7200.0, write=15.0, pool=30.0)
+    SAFE_TIMEOUT = httpx.Timeout(connect=3.5, read=7200.0, write=15.0, pool=15.0)
 
     last_network_error = None
     for proxy_attempt in range(3):
-        proxy_url, raw_token_bytes = await fetch_single_valid_proxy(session_id)
+        proxy_url, raw_token_bytes, clean_ip_port = await fetch_single_valid_proxy(session_id)
         if not proxy_url:
             break
 
         proxy_client = None
         upstream_response = None
         try:
-            transport = httpx.AsyncHTTPTransport(proxy=proxy_url, verify=False, limits=httpx.Limits(max_keepalive_connections=50, max_connections=100))
+            transport = httpx.AsyncHTTPTransport(
+                proxy=proxy_url, 
+                verify=SHARED_SSL_CONTEXT, 
+                limits=httpx.Limits(max_keepalive_connections=0, max_connections=1)
+            )
             proxy_client = httpx.AsyncClient(transport=transport, timeout=SAFE_TIMEOUT, follow_redirects=False)
             
             req = proxy_client.build_request(
                 method=request.method,
                 url=final_target_url,
                 headers=camouflaged_headers,
-                content=request_body,
+                content=request_content,
             )
             upstream_response = await proxy_client.send(req, stream=True)
 
             if upstream_response.status_code == 407:
                 await upstream_response.aclose()
                 await proxy_client.aclose()
-                if raw_token_bytes:
-                    await redis_vault_proxies.srem("vip_proxy_pool", raw_token_bytes)
+                await purge_dead_proxy_everywhere(raw_token_bytes, clean_ip_port)
                 if session_id:
                     await redis_vault_proxies.delete(f"session_proxy:{session_id}")
                 continue
@@ -530,7 +586,7 @@ async def gateway_proxy_handler(
                 'te', 'trailers', 'transfer-encoding', 'upgrade', 'content-encoding',
                 'access-control-allow-origin', 'access-control-allow-credentials',
                 'access-control-allow-methods', 'access-control-allow-headers',
-                'content-type'
+                'content-type', 'via', 'x-cache'
             }
             
             if upstream_response.status_code != 206 and 'content-range' not in upstream_response.headers:
@@ -568,7 +624,7 @@ async def gateway_proxy_handler(
                 headers=response_headers,
                 media_type=final_media_type
             )
-        except (httpx.ProxyError, httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as conn_err:
+        except (httpx.ProxyError, httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout, httpx.TimeoutException, httpx.NetworkError) as conn_err:
             if upstream_response:
                 try:
                     await upstream_response.aclose()
@@ -577,23 +633,12 @@ async def gateway_proxy_handler(
             if proxy_client:
                 await proxy_client.aclose()
             
-            if raw_token_bytes:
-                await redis_vault_proxies.srem("vip_proxy_pool", raw_token_bytes)
+            await purge_dead_proxy_everywhere(raw_token_bytes, clean_ip_port)
             if session_id:
                 await redis_vault_proxies.delete(f"session_proxy:{session_id}")
             
             last_network_error = conn_err
             continue
-        except httpx.TimeoutException:
-            if upstream_response:
-                try:
-                    await upstream_response.aclose()
-                except Exception:
-                    pass
-            if proxy_client:
-                await proxy_client.aclose()
-            await dispatch_gateway_telemetry("upstream_timeout", client_slot_name, target_domain, time.time() - start_time, 504)
-            raise HTTPException(status_code=504, detail="Gateway Timeout: Upstream target took too long to respond.")
         except Exception as e:
             if upstream_response:
                 try:
@@ -628,3 +673,7 @@ async def health_check():
         }
     except Exception as e:
         return {"status": "degraded", "error": str(e)}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("core.master4_gateway:app", host="0.0.0.0", port=8000, reload=False, workers=1)
