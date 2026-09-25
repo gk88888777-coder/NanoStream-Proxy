@@ -27,7 +27,7 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
-app = FastAPI(title="NanoStream-Proxy Control Room", version="20.0.0")
+app = FastAPI(title="NanoStream-Proxy Control Room", version="21.0.0")
 
 app.add_middleware(
     CORSMiddleware,
