@@ -35,7 +35,7 @@
         <!-- Master Passport Key Card -->
         <div id="master-passport-card" class="hidden bg-gradient-to-r from-blue-900/40 via-indigo-900/30 to-slate-800/60 p-4 rounded-2xl border border-blue-500/30 items-center justify-between gap-4 shadow-xl">
             <div class="space-y-1">
-                <span class="text-[10px] uppercase tracking-wider font-bold text-blue-400">Master Passport Access</span>
+                <span class="text-[10px] uppercase tracking-wider font-bold text-blue-400">Master Root Passport (Permanent Super-Admin Key)</span>
                 <div id="master-passport-key-display" class="font-mono text-sm font-bold text-white">--</div>
             </div>
             <div class="flex items-center gap-3">
@@ -44,10 +44,10 @@
                     <div class="text-[9px] text-slate-400">Master Usage</div>
                 </div>
                 <button id="btn-copy-master-url" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-xs font-bold transition-all shadow-sm">
-                    📋 Copy Proxy URL
+                    🔗 Master URL
                 </button>
                 <button id="btn-copy-master-curl" class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all shadow-sm">
-                    ⚡ Copy cURL
+                    📋 Master Curl
                 </button>
             </div>
         </div>
@@ -352,11 +352,14 @@
                 document.getElementById('master-passport-key-display').innerText = data.master_key.full_key || '--';
                 document.getElementById('master-passport-data').innerText = data.master_key.data_usage || '0.0 MB';
                 
+                // Updated master proxy string copy handler with fallback mechanism
                 document.getElementById('btn-copy-master-url').onclick = function() {
-                    copyKeyText(data.master_key.stream_url || `${window.location.origin}/gateway/proxy?key=${data.master_key.full_key}&target_url=`, this);
+                    copyKeyText(data.master_key.proxy_string || `http://gk:${data.master_key.full_key}@${window.location.hostname}:8080`, this);
                 };
+                
+                // Updated master cURL command copy handler with fallback mechanism
                 document.getElementById('btn-copy-master-curl').onclick = function() {
-                    copyKeyText(data.master_key.curl_cmd || `curl -H "x-api-key: ${data.master_key.full_key}" "${window.location.origin}/gateway/proxy?target_url=https://httpbin.org/ip"`, this);
+                    copyKeyText(data.master_key.curl_cmd || `curl -x "http://gk:${data.master_key.full_key}@${window.location.hostname}:8080" "https://httpbin.org/ip"`, this);
                 };
             }
 
@@ -584,7 +587,7 @@
                 setTimeout(() => {
                     btnElement.innerText = originalText;
                     btnElement.classList.remove('bg-emerald-600');
-                    btnElement.classList.add(originalText.includes('Proxy') ? 'bg-blue-600' : 'bg-indigo-600');
+                    btnElement.classList.add(originalText.includes('URL') ? 'bg-blue-600' : 'bg-indigo-600');
                 }, 2000);
             });
         }
