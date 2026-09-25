@@ -5,6 +5,7 @@ import secrets
 import re
 import inspect
 from datetime import datetime
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Depends, Security, Request, WebSocket, WebSocketDisconnect
 from fastapi.security import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,16 +28,6 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
-app = FastAPI(title="NanoStream-Proxy Control Room", version="21.0.0")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 BASE_URL = os.environ.get("BASE_URL", "https://nanostream4x.duckdns.org")
 
 REDIS_HOST = os.environ.get("REDIS_HOST", "127.0.0.1")
@@ -46,10 +37,12 @@ REDIS_PASSWORD = os.environ.get("REDIS_PASSWORD", None)
 MAX_SOCKET_CONNECTIONS = int(os.environ.get("MAX_SOCKET_CONNECTIONS", 4000))
 
 redis_pool_proxies = redis.ConnectionPool(
-    host=REDIS_HOST, port=REDIS_PORT, db=0, password=REDIS_PASSWORD, max_connections=MAX_SOCKET_CONNECTIONS
+    host=REDIS_HOST, port=REDIS_PORT, db=0, password=REDIS_PASSWORD, 
+    max_connections=MAX_SOCKET_CONNECTIONS, socket_timeout=5.0, socket_connect_timeout=3.0, retry_on_timeout=True
 )
 redis_pool_keys = redis.ConnectionPool(
-    host=REDIS_HOST, port=REDIS_PORT, db=1, password=REDIS_PASSWORD, decode_responses=True, max_connections=MAX_SOCKET_CONNECTIONS
+    host=REDIS_HOST, port=REDIS_PORT, db=1, password=REDIS_PASSWORD, decode_responses=True, 
+    max_connections=MAX_SOCKET_CONNECTIONS, socket_timeout=5.0, socket_connect_timeout=3.0, retry_on_timeout=True
 )
 
 redis_vault_proxies = redis.Redis(connection_pool=redis_pool_proxies)
@@ -59,6 +52,29 @@ ADMIN_MASTER_KEY = os.environ.get("ADMIN_MASTER_KEY", "gaurav332").strip()
 admin_api_key_header = APIKeyHeader(name="X-Admin-Key", auto_error=False)
 
 background_worker_tasks: List[asyncio.Task] = []
+slot_allocation_lock = asyncio.Lock()
+
+LATEST_TELEMETRY_CACHE: Dict[str, Any] = {
+    "hunter_status": "Active",
+    "hunted_count": 0,
+    "execution_time": "0.00s",
+    "sources_active": 55,
+    "inspector_status": "Active",
+    "tested_count": 0,
+    "elite_passed": 0,
+    "vault_status": "Optimized",
+    "maintenance_status": "Active",
+    "health_score": "100%",
+    "purged_count": 0,
+    "stream_scan": "Idle",
+    "gateway_status": "Active",
+    "active_client": "Fleet Core",
+    "target_domain": "Standby",
+    "throughput": "0.00s",
+    "http_status": "200 OK",
+    "enterprise_slots": "0/5 Active",
+    "standard_slots": "0/500 Active"
+}
 
 async def get_max_enterprise_slots() -> int:
     val = await redis_vault_keys.get("sys:config:ent_max_slots")
@@ -121,9 +137,13 @@ async def send_ws_payload(ws: WebSocket, data: str) -> Optional[WebSocket]:
         return ws
 
 async def ui_dashboard_broadcaster(payload: Dict[str, Any]):
+    global LATEST_TELEMETRY_CACHE
+    LATEST_TELEMETRY_CACHE.update(payload)
+
     if not active_websockets:
         return
-    data = json.dumps(payload)
+
+    data = json.dumps(LATEST_TELEMETRY_CACHE)
     sockets_snapshot = list(active_websockets)
     
     results = await asyncio.gather(*[send_ws_payload(ws, data) for ws in sockets_snapshot], return_exceptions=True)
@@ -136,8 +156,7 @@ async def ui_dashboard_broadcaster(payload: Dict[str, Any]):
                 pass
             active_websockets.remove(dead_ws)
 
-@app.websocket("/ws/telemetry")
-async def websocket_telemetry(websocket: WebSocket):
+async def handle_websocket_subscription(websocket: WebSocket):
     await websocket.accept()
     active_websockets.append(websocket)
     
@@ -149,28 +168,11 @@ async def websocket_telemetry(websocket: WebSocket):
         ent_max = await get_max_enterprise_slots()
         std_max = await get_max_standard_slots()
 
-        initial_payload = {
-            "hunter_status": "Active",
-            "hunted_count": current_ips,
-            "execution_time": "0.35s",
-            "sources_active": 4,
-            "inspector_status": "Active",
-            "tested_count": current_ips * 2,
-            "elite_passed": current_ips,
-            "vault_status": "Optimized",
-            "maintenance_status": "Active",
-            "health_score": "100%",
-            "purged_count": 0,
-            "stream_scan": "Active",
-            "gateway_status": "Active",
-            "active_client": "Enterprise Fleet Core",
-            "target_domain": "Fleet Standby",
-            "throughput": "0.00s",
-            "http_status": "200 OK",
-            "enterprise_slots": f"{enterprise_count}/{ent_max} Active",
-            "standard_slots": f"{standard_count}/{std_max} Active"
-        }
-        await websocket.send_text(json.dumps(initial_payload))
+        LATEST_TELEMETRY_CACHE["hunted_count"] = current_ips
+        LATEST_TELEMETRY_CACHE["enterprise_slots"] = f"{enterprise_count}/{ent_max} Active"
+        LATEST_TELEMETRY_CACHE["standard_slots"] = f"{standard_count}/{std_max} Active"
+
+        await websocket.send_text(json.dumps(LATEST_TELEMETRY_CACHE))
         
         while True:
             await websocket.receive_text()
@@ -196,21 +198,30 @@ def resilient_instantiate(cls, **kwargs):
             return cls()
 
 gateway_app.state.ui_broadcast = ui_dashboard_broadcaster
+
 hunter = resilient_instantiate(ProxyHunter, ui_broadcast_callback=ui_dashboard_broadcaster)
 inspector = resilient_instantiate(ProxyInspector, ui_broadcast_callback=ui_dashboard_broadcaster)
 doctor = resilient_instantiate(VaultDoctor, ui_broadcast_callback=ui_dashboard_broadcaster)
 
 async def proxy_supply_chain_loop():
+    PROACTIVE_HUNT_INTERVAL = 300.0
+    last_hunt_time = 0.0
+
     while True:
         try:
-            current_ips = await redis_vault_proxies.scard("vip_proxy_pool")
+            now = time.time()
+            current_ips = await redis_vault_proxies.scard("vip_proxy_pool") or 0
             min_ips = getattr(doctor, 'minimum_healthy_ips', 50)
             
-            should_hunt = (current_ips < min_ips) or pool_starvation_event.is_set()
-            
-            if should_hunt:
+            is_starved = pool_starvation_event.is_set()
+            is_low_pool = (current_ips < min_ips)
+            is_interval_due = (now - last_hunt_time >= PROACTIVE_HUNT_INTERVAL)
+
+            if is_starved or is_low_pool or is_interval_due:
                 pool_starvation_event.clear()
-                logging.info(f"[SUPPLY CHAIN] Pool count ({current_ips}) low or starved. Triggering Hunter...")
+                reason = "Starvation event" if is_starved else ("Low pool" if is_low_pool else "Periodic proactive refresh")
+                logging.info(f"[SUPPLY CHAIN] Triggering Harvester (Reason: {reason} | Vault Pool: {current_ips} IPs)...")
+                
                 raw_ips = None
                 if hasattr(hunter, 'execute_hunt'):
                     raw_ips = await hunter.execute_hunt()
@@ -218,37 +229,41 @@ async def proxy_supply_chain_loop():
                     raw_ips = await hunter.hunt_proxies()
                 
                 if raw_ips:
+                    logging.info(f"[SUPPLY CHAIN] Passing {len(raw_ips):,} raw candidates to Inspector...")
                     if hasattr(inspector, 'execute_inspection'):
                         await inspector.execute_inspection(raw_ips)
                     elif hasattr(inspector, 'inspect_proxies'):
                         await inspector.inspect_proxies(raw_ips)
+                
+                last_hunt_time = time.time()
 
             try:
-                await asyncio.wait_for(pool_starvation_event.wait(), timeout=10.0)
+                await asyncio.wait_for(pool_starvation_event.wait(), timeout=5.0)
             except asyncio.TimeoutError:
                 pass
 
         except asyncio.CancelledError:
             break
         except Exception as e:
-            logging.error(f"Error in Supply Chain Loop: {e}")
-            await asyncio.sleep(2)
+            logging.error(f"[SUPPLY CHAIN] Error in Supply Chain Loop: {e}")
+            await asyncio.sleep(5)
 
 async def vault_maintenance_loop():
+    await asyncio.sleep(15)
     while True:
         try:
-            if hasattr(doctor, 'execute_maintenance_cycle'):
-                await doctor.execute_maintenance_cycle()
-            elif hasattr(doctor, 'perform_vault_surgery'):
+            if hasattr(doctor, 'perform_vault_surgery'):
                 await doctor.perform_vault_surgery()
+            elif hasattr(doctor, 'execute_maintenance_cycle'):
+                await doctor.execute_maintenance_cycle()
         except asyncio.CancelledError:
             break
         except Exception as e:
-            logging.error(f"Error in Maintenance Loop: {e}")
-        await asyncio.sleep(60)
+            logging.error(f"[VAULT DOCTOR] Error in Maintenance Loop: {e}")
+        await asyncio.sleep(90)
 
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def app_lifespan(app_instance: FastAPI):
     logging.info("NanoStream Booting: Hyper-Scale Event-Driven Engine Online...")
     
     try:
@@ -275,20 +290,23 @@ async def startup_event():
         await redis_vault_keys.persist(redis_key_name)
         await redis_vault_keys.sadd("active_keys_registry", default_client_key)
 
-        existing_keys = await redis_vault_keys.keys("api_key:*")
-        if existing_keys:
-            tokens = [k.replace("api_key:", "") for k in existing_keys]
-            await redis_vault_keys.sadd("active_keys_registry", *tokens)
+        existing_tokens = []
+        async for raw_k in redis_vault_keys.scan_iter("api_key:*", count=250):
+            token_str = raw_k.replace("api_key:", "")
+            existing_tokens.append(token_str)
+
+        if existing_tokens:
+            await redis_vault_keys.sadd("active_keys_registry", *existing_tokens)
             
             pipe = redis_vault_keys.pipeline()
-            for t in tokens:
+            for t in existing_tokens:
                 if t != "gk(GK)321":
                     pipe.get(f"api_key_tier:{t}")
             tiers = await pipe.execute()
             
             ent_keys_to_add = []
             std_keys_to_add = []
-            for t, tier in zip([t for t in tokens if t != "gk(GK)321"], tiers):
+            for t, tier in zip([t for t in existing_tokens if t != "gk(GK)321"], tiers):
                 if tier == "enterprise":
                     ent_keys_to_add.append(t)
                 else:
@@ -299,7 +317,7 @@ async def startup_event():
             if std_keys_to_add:
                 await redis_vault_keys.sadd("standard_keys_registry", *std_keys_to_add)
 
-            logging.info(f"[KEY RECOVERY] Restored {len(tokens)} keys into registries atomically.")
+            logging.info(f"[KEY RECOVERY] Restored {len(existing_tokens)} keys into registries atomically.")
             
     except Exception as e:
         logging.error(f"Startup Redis synchronization failed: {e}")
@@ -308,18 +326,44 @@ async def startup_event():
     task2 = asyncio.create_task(vault_maintenance_loop())
     background_worker_tasks.extend([task1, task2])
 
-@app.on_event("shutdown")
-async def shutdown_event():
+    yield
+
     logging.info("NanoStream Shutdown initiated. Cleaning worker tasks and Redis pools...")
     for task in background_worker_tasks:
         task.cancel()
     await asyncio.gather(*background_worker_tasks, return_exceptions=True)
+    
+    if hasattr(hunter, 'close'):
+        await hunter.close()
+    if hasattr(inspector, 'close'):
+        await inspector.close()
+    if hasattr(doctor, 'close'):
+        await doctor.close()
+        
     await redis_vault_proxies.aclose()
     await redis_pool_proxies.disconnect()
     await redis_vault_keys.aclose()
     await redis_pool_keys.disconnect()
     await close_gateway_resources()
     logging.info("Cleanup complete. Shutdown successful.")
+
+app = FastAPI(title="NanoStream-Proxy Control Room", version="21.0.0", lifespan=app_lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+@app.websocket("/ws/telemetry")
+async def websocket_telemetry_primary(websocket: WebSocket):
+    await handle_websocket_subscription(websocket)
+
+@app.websocket("/ws")
+async def websocket_telemetry_alias(websocket: WebSocket):
+    await handle_websocket_subscription(websocket)
 
 def format_bytes_to_human(byte_count: int) -> str:
     if not byte_count or byte_count <= 0:
@@ -334,7 +378,6 @@ def format_bytes_to_human(byte_count: int) -> str:
     return f"{tb:.2f} TB"
 
 async def auto_prune_expired_slots():
-    """High-speed Pipelined Cleanup: Prunes ghost keys atomically"""
     for reg_name in ["enterprise_b2b_registry", "standard_keys_registry"]:
         keys = list(await redis_vault_keys.smembers(reg_name))
         if not keys:
@@ -451,17 +494,6 @@ async def generate_api_key(request: CreateKeyRequest):
     clean_country = request.country.strip() if request.country else "🌐 Global / Unspecified"
     clean_purpose = request.purpose.strip() if request.purpose else "General Media / Proxy Usage"
 
-    await auto_prune_expired_slots()
-
-    slot_num = await allocate_next_available_slot(clean_tier)
-    if slot_num == 0:
-        max_ent = await get_max_enterprise_slots()
-        max_std = await get_max_standard_slots()
-        if clean_tier == "enterprise":
-            raise HTTPException(status_code=400, detail=f"Enterprise Slots Full: All {max_ent} Company slots are occupied.")
-        else:
-            raise HTTPException(status_code=400, detail=f"Standard Slots Full: All {max_std} Retail user slots are occupied.")
-
     clean_custom_key = request.custom_api_key.strip() if request.custom_api_key else None
     if clean_custom_key:
         if not SAFE_KEY_PATTERN.match(clean_custom_key):
@@ -470,40 +502,51 @@ async def generate_api_key(request: CreateKeyRequest):
     prefix = "ent_" if clean_tier == "enterprise" else "std_"
     new_key = clean_custom_key if clean_custom_key else f"{prefix}{secrets.token_hex(16)}"
     redis_key_name = f"api_key:{new_key}"
-    
-    if await redis_vault_keys.exists(redis_key_name):
-        raise HTTPException(status_code=409, detail=f"Conflict: API Key '{new_key}' already exists in vault.")
 
-    if request.expiry_seconds and request.expiry_seconds > 0:
-        await redis_vault_keys.setex(redis_key_name, request.expiry_seconds, clean_client_name)
-        key_type = "subscription_timed"
-    else:
-        await redis_vault_keys.set(redis_key_name, clean_client_name)
-        key_type = "permanent_unlimited"
+    async with slot_allocation_lock:
+        await auto_prune_expired_slots()
+
+        slot_num = await allocate_next_available_slot(clean_tier)
+        if slot_num == 0:
+            max_ent = await get_max_enterprise_slots()
+            max_std = await get_max_standard_slots()
+            if clean_tier == "enterprise":
+                raise HTTPException(status_code=400, detail=f"Enterprise Slots Full: All {max_ent} Company slots are occupied.")
+            else:
+                raise HTTPException(status_code=400, detail=f"Standard Slots Full: All {max_std} Retail user slots are occupied.")
         
-    await redis_vault_keys.sadd("active_keys_registry", new_key)
+        if await redis_vault_keys.exists(redis_key_name):
+            raise HTTPException(status_code=409, detail=f"Conflict: API Key '{new_key}' already exists in vault.")
 
-    await redis_vault_keys.set(f"api_key_tier:{new_key}", clean_tier)
-    await redis_vault_keys.set(f"api_key_country:{new_key}", clean_country)
-    await redis_vault_keys.set(f"api_key_purpose:{new_key}", clean_purpose)
-    await redis_vault_keys.set(f"api_key_slot:{new_key}", slot_num)
-
-    if clean_tier == "enterprise":
-        await redis_vault_keys.sadd("enterprise_b2b_registry", new_key)
-        allocated_rps = request.allocated_rps if request.allocated_rps is not None else 10000
-    else:
-        await redis_vault_keys.sadd("standard_keys_registry", new_key)
-        allocated_rps = 15
-
-    await redis_vault_keys.set(f"api_key_rps:{new_key}", allocated_rps)
-
-    if request.bind_ip and request.bind_ip.strip():
-        await redis_vault_keys.set(f"api_key_ip:{new_key}", request.bind_ip.strip())
         if request.expiry_seconds and request.expiry_seconds > 0:
-            await redis_vault_keys.expire(f"api_key_ip:{new_key}", request.expiry_seconds)
+            await redis_vault_keys.setex(redis_key_name, request.expiry_seconds, clean_client_name)
+            key_type = "subscription_timed"
+        else:
+            await redis_vault_keys.set(redis_key_name, clean_client_name)
+            key_type = "permanent_unlimited"
+            
+        await redis_vault_keys.sadd("active_keys_registry", new_key)
+        await redis_vault_keys.set(f"api_key_tier:{new_key}", clean_tier)
+        await redis_vault_keys.set(f"api_key_country:{new_key}", clean_country)
+        await redis_vault_keys.set(f"api_key_purpose:{new_key}", clean_purpose)
+        await redis_vault_keys.set(f"api_key_slot:{new_key}", slot_num)
 
-    await redis_vault_keys.set(f"data_usage_bytes:{new_key}", 0)
-    await redis_vault_keys.set(f"request_count:{new_key}", 0)
+        if clean_tier == "enterprise":
+            await redis_vault_keys.sadd("enterprise_b2b_registry", new_key)
+            allocated_rps = request.allocated_rps if request.allocated_rps is not None else 10000
+        else:
+            await redis_vault_keys.sadd("standard_keys_registry", new_key)
+            allocated_rps = 25
+
+        await redis_vault_keys.set(f"api_key_rps:{new_key}", allocated_rps)
+
+        if request.bind_ip and request.bind_ip.strip():
+            await redis_vault_keys.set(f"api_key_ip:{new_key}", request.bind_ip.strip())
+            if request.expiry_seconds and request.expiry_seconds > 0:
+                await redis_vault_keys.expire(f"api_key_ip:{new_key}", request.expiry_seconds)
+
+        await redis_vault_keys.set(f"data_usage_bytes:{new_key}", 0)
+        await redis_vault_keys.set(f"request_count:{new_key}", 0)
 
     LOCAL_KEY_CACHE.pop(new_key, None)
     logging.info(f"KEY GENERATED -> Tier: {clean_tier.upper()} | Slot #{slot_num} | Name: {clean_client_name}")
@@ -740,7 +783,7 @@ async def list_api_keys():
         slot_number = int(raw_slot) if (raw_slot and str(raw_slot).isdigit()) else 1
 
         human_data = format_bytes_to_human(byte_count)
-        rps_int = int(allocated_rps) if allocated_rps else (10000 if tier == "enterprise" else 15)
+        rps_int = int(allocated_rps) if allocated_rps else (10000 if tier == "enterprise" else 25)
         rps_display = "Unlimited (Tier 0)" if rps_int == 0 else f"{rps_int:,} req/sec"
 
         target_timestamp = (int(time.time()) + ttl) if ttl > 0 else None
@@ -852,6 +895,7 @@ async def premium_dashboard():
         )
 
 app.mount("/gateway", gateway_app)
+app.include_router(gateway_app.router)
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
