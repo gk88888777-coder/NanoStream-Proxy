@@ -9,6 +9,7 @@ import ipaddress
 import warnings
 import re
 import secrets
+import base64
 from typing import Optional, Tuple, Dict, Any, AsyncIterator
 from urllib.parse import urlparse, unquote, urljoin, quote
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
@@ -30,6 +31,8 @@ logging.basicConfig(
 )
 
 BASE_URL = os.environ.get("BASE_URL", "https://nanostream4x.duckdns.org").rstrip('/')
+PROXY_PORT = int(os.environ.get("PROXY_PORT", 8080))
+PROXY_DOMAIN = urlparse(BASE_URL).hostname or "nanostream4x.duckdns.org"
 
 SHARED_SSL_CONTEXT = ssl.create_default_context()
 SHARED_SSL_CONTEXT.check_hostname = False
@@ -71,7 +74,143 @@ TELEMETRY_SAMPLE_COUNTER = 0
 CGNAT_NETWORK = ipaddress.IPv4Network('100.64.0.0/10')
 BLOCKED_INTERNAL_NAMES = {'localhost', 'internal', 'metadata.google.internal', '0.0.0.0', '127.0.0.1', '::1', '169.254.169.254'}
 
+ui_broadcast_callback = None
+raw_tcp_server_instance = None
+
+def set_ui_broadcaster(callback_func):
+    global ui_broadcast_callback
+    ui_broadcast_callback = callback_func
+
+# --- RAW TCP PROXY LOGIC ---
+
+async def tcp_forward_pipe(reader: asyncio.StreamReader, writer: asyncio.StreamWriter, api_key: str):
+    try:
+        while True:
+            data = await reader.read(65536)
+            if not data:
+                break
+            writer.write(data)
+            await writer.drain()
+            if api_key:
+                try:
+                    await redis_vault_keys.incrby(f"data_usage_bytes:{api_key}", len(data))
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+async def handle_raw_tcp_proxy(client_reader: asyncio.StreamReader, client_writer: asyncio.StreamWriter):
+    try:
+        header_data = await asyncio.wait_for(client_reader.readuntil(b"\r\n\r\n"), timeout=10.0)
+    except Exception:
+        client_writer.close()
+        return
+
+    lines = header_data.decode("utf-8", errors="ignore").split("\r\n")
+    if not lines or not lines[0]:
+        client_writer.close()
+        return
+
+    method, target = lines[0].split()[0:2]
+    
+    api_key = ""
+    for line in lines[1:]:
+        if line.lower().startswith("proxy-authorization:"):
+            try:
+                b64_str = line.split(":", 1)[1].strip().split()[1]
+                decoded = base64.b64decode(b64_str).decode("utf-8")
+                api_key = decoded.split(":", 1)[1] if ":" in decoded else decoded
+            except Exception:
+                pass
+            break
+
+    if not api_key:
+        client_writer.write(b"HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"NanoStream\"\r\nConnection: close\r\n\r\n")
+        await client_writer.drain()
+        client_writer.close()
+        return
+
+    client_slot_name, tier, allocated_rps, bound_ip = await get_cached_client_profile(api_key)
+    if not client_slot_name:
+        client_writer.write(b"HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"NanoStream\"\r\nConnection: close\r\n\r\nInvalid API Key")
+        await client_writer.drain()
+        client_writer.close()
+        return
+
+    asyncio.create_task(redis_vault_keys.incr(f"request_count:{api_key}"))
+
+    proxy_url, raw_token, clean_ip = await fetch_single_valid_proxy()
+    if not proxy_url:
+        client_writer.write(b"HTTP/1.1 502 Bad Gateway\r\n\r\n")
+        await client_writer.drain()
+        client_writer.close()
+        return
+
+    p_parsed = urlparse(proxy_url)
+    up_writer = None
+    
+    try:
+        if method.upper() == "CONNECT":
+            dest_host, dest_port = target.split(":") if ":" in target else (target, 443)
+            up_reader, up_writer = await asyncio.wait_for(asyncio.open_connection(p_parsed.hostname, p_parsed.port or 80), timeout=6.0)
+            up_writer.write(f"CONNECT {dest_host}:{dest_port} HTTP/1.1\r\nHost: {dest_host}:{dest_port}\r\n\r\n".encode())
+            await up_writer.drain()
+            
+            resp = await up_reader.readline()
+            if b"200" not in resp:
+                raise Exception("Upstream Rejected")
+                
+            client_writer.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")
+            await client_writer.drain()
+                
+        else:
+            up_reader, up_writer = await asyncio.wait_for(asyncio.open_connection(p_parsed.hostname, p_parsed.port or 80), timeout=6.0)
+            clean_headers = [f"{method} {target} HTTP/1.1"]
+            for h in lines[1:]:
+                hl = h.lower()
+                if not (hl.startswith("proxy-authorization:") or hl.startswith("proxy-connection:")):
+                    clean_headers.append(h)
+            
+            up_writer.write(("\r\n".join(clean_headers) + "\r\n\r\n").encode())
+            await up_writer.drain()
+
+        task1 = asyncio.create_task(tcp_forward_pipe(client_reader, up_writer, api_key))
+        task2 = asyncio.create_task(tcp_forward_pipe(up_reader, client_writer, api_key))
+        await asyncio.gather(task1, task2, return_exceptions=True)
+
+    except Exception:
+        pass
+    finally:
+        if up_writer:
+            try:
+                up_writer.close()
+            except Exception:
+                pass
+        try:
+            client_writer.close()
+        except Exception:
+            pass
+
+async def start_background_tcp_proxy():
+    global raw_tcp_server_instance
+    raw_tcp_server_instance = await asyncio.start_server(handle_raw_tcp_proxy, "0.0.0.0", PROXY_PORT)
+    logging.info(f"=== [ENGINE 4] RAW PROXY ACTIVE ON PORT {PROXY_PORT} ===")
+    async with raw_tcp_server_instance:
+        await raw_tcp_server_instance.serve_forever()
+
+
+# --- GATEWAY LIFESPAN & RESOURCE MANAGEMENT ---
+
 async def close_gateway_resources():
+    global raw_tcp_server_instance
+    if raw_tcp_server_instance:
+        try:
+            raw_tcp_server_instance.close()
+            await raw_tcp_server_instance.wait_closed()
+            logging.info("[ENGINE 4] TCP Forward Proxy Server closed cleanly.")
+        except Exception as e:
+            logging.error(f"[ENGINE 4] Error closing TCP proxy: {e}")
+            
     try:
         await redis_vault_proxies.aclose()
         await redis_pool_proxies.disconnect()
@@ -84,7 +223,9 @@ async def close_gateway_resources():
 @asynccontextmanager
 async def gateway_lifespan(app_instance: FastAPI):
     logging.info("[ENGINE 4] NanoStream Hyper-Scale Gateway operational.")
+    tcp_task = asyncio.create_task(start_background_tcp_proxy())
     yield
+    tcp_task.cancel()
     await close_gateway_resources()
 
 app = FastAPI(title="NanoStream 4X Hyper-Scale Gateway", version="21.0.0", lifespan=gateway_lifespan)
@@ -107,14 +248,14 @@ def get_real_client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 async def dispatch_gateway_telemetry(status: str, client_slot: str, target_domain: str, exec_time: float, http_status_code: int = 200):
-    global TELEMETRY_SAMPLE_COUNTER
+    global TELEMETRY_SAMPLE_COUNTER, ui_broadcast_callback
     TELEMETRY_SAMPLE_COUNTER += 1
     
     if TELEMETRY_SAMPLE_COUNTER % 20 != 0 and status == "tunnel_established":
         return
 
-    ui_broadcast = getattr(app.state, "ui_broadcast", None)
-    if ui_broadcast:
+    broadcaster = ui_broadcast_callback or getattr(app.state, "ui_broadcast", None)
+    if broadcaster:
         payload = {
             "engine": "master_4_gateway",
             "status": status,
@@ -127,10 +268,10 @@ async def dispatch_gateway_telemetry(status: str, client_slot: str, target_domai
             "http_status": str(http_status_code)
         }
         try:
-            if asyncio.iscoroutinefunction(ui_broadcast):
-                await asyncio.wait_for(ui_broadcast(payload), timeout=1.5)
+            if asyncio.iscoroutinefunction(broadcaster):
+                await asyncio.wait_for(broadcaster(payload), timeout=1.5)
             else:
-                ui_broadcast(payload)
+                broadcaster(payload)
         except Exception:
             pass
 
