@@ -937,4 +937,17 @@ app.mount("/gateway", gateway_app)
 app.include_router(gateway_app.router)
 
 if __name__ == "__main__":
+    import os
+    import time
+    
+    logging.info(f"[AUTO-HEAL] Checking and clearing Ghost Processes on ports {WEB_PORT} and {PROXY_PORT}...")
+    try:
+        # Automatically clean up any stuck ghost processes on the required ports before starting
+        os.system(f"fuser -k -9 {WEB_PORT}/tcp >/dev/null 2>&1")
+        os.system(f"fuser -k -9 {PROXY_PORT}/tcp >/dev/null 2>&1")
+        time.sleep(1.5)  # Allow OS sufficient time to completely release the port bindings
+        logging.info("[AUTO-HEAL] Ports cleared successfully. Starting server...")
+    except Exception as e:
+        logging.warning(f"[AUTO-HEAL] Port cleanup skipped: {e}")
+
     uvicorn.run("main:app", host="0.0.0.0", port=WEB_PORT, reload=False)
