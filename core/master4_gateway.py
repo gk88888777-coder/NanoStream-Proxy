@@ -7,7 +7,7 @@ import logging
 import ipaddress
 import warnings
 from typing import Optional, Tuple, Dict, Any
-from urllib.parse import urlparse, unquote, parse_qs
+from urllib.parse import urlparse, unquote
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, Response
@@ -25,7 +25,7 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
-app = FastAPI(title="NanoStream 4X Hyper-Scale Gateway", version="20.0.0")
+app = FastAPI(title="NanoStream 4X Hyper-Scale Gateway", version="21.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -285,14 +285,33 @@ def extract_clean_target_url(request: Request, raw_target_param: Optional[str], 
         return header_url.strip()
 
     raw_query = str(request.url.query)
-    if "target_url=" in raw_query or "url=" in raw_query:
-        parsed_q = parse_qs(raw_query, keep_blank_values=True)
-        target_list = parsed_q.get("target_url") or parsed_q.get("url")
-        if target_list and target_list[0]:
-            return target_list[0]
+    target_marker = None
+    if "target_url=" in raw_query:
+        target_marker = "target_url="
+    elif "url=" in raw_query:
+        target_marker = "url="
+
+    if target_marker:
+        candidate = raw_query.split(target_marker, 1)[1]
+        if raw_auth_key:
+            for k in [raw_auth_key, unquote(raw_auth_key)]:
+                for prefix in [f"&key={k}", f"&api_key={k}"]:
+                    if candidate.endswith(prefix):
+                        candidate = candidate[:-len(prefix)]
+                        break
+
+        session_id = request.query_params.get("session") or request.query_params.get("session_id")
+        if session_id:
+            for prefix in [f"&session={session_id}", f"&session_id={session_id}"]:
+                if candidate.endswith(prefix):
+                    candidate = candidate[:-len(prefix)]
+                    break
+
+        if candidate:
+            return smart_decode_target_url(candidate)
 
     if raw_target_param:
-        return raw_target_param.strip()
+        return smart_decode_target_url(raw_target_param)
 
     raise HTTPException(status_code=400, detail="Bad Request: Missing 'target_url' parameter or 'X-Target-URL' header.")
 
@@ -387,7 +406,16 @@ async def gateway_proxy_handler(
         was_registered = await redis_vault_keys.sismember("active_keys_registry", x_api_key)
         if was_registered:
             LOCAL_KEY_CACHE.pop(x_api_key, None)
-            await redis_vault_keys.srem("active_keys_registry", x_api_key)
+            pipe = redis_vault_keys.pipeline()
+            pipe.srem("active_keys_registry", x_api_key)
+            pipe.srem("enterprise_b2b_registry", x_api_key)
+            pipe.srem("standard_keys_registry", x_api_key)
+            pipe.delete(
+                f"api_key_ip:{x_api_key}", f"api_key_rps:{x_api_key}", f"api_key_tier:{x_api_key}",
+                f"api_key_country:{x_api_key}", f"api_key_purpose:{x_api_key}", f"api_key_slot:{x_api_key}",
+                f"request_count:{x_api_key}", f"data_usage_bytes:{x_api_key}"
+            )
+            await pipe.execute()
             await dispatch_gateway_telemetry("auth_failed", "Expired Client", "N/A", time.time() - start_time, 403)
             raise HTTPException(status_code=403, detail="Forbidden: API Key / Subscription has expired. Please renew.")
 
