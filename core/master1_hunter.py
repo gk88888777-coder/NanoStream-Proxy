@@ -1,10 +1,3 @@
-"""
-Engine 1: Fortified High-Velocity Proxy Harvester (Master 1)
-Architecture: SingleFlight DNS Resolver, Anti-SSRF Guard, Circuit-Breaker Auto-Heal,
-5MB Streaming Cap, and Zero-Socket-Leak HTTP Transport.
-Compatibility: 100% verified with Engine 2, Engine 3, Engine 4, and main.py.
-"""
-
 import asyncio
 import httpx
 import re
@@ -26,19 +19,14 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
-
-# =====================================================================
-# 1. CONFIGURATION LAYER (Feeds, Constants, and Strict Rules)
-# =====================================================================
 class HunterConfig:
-    MAX_FEED_BYTES = 5 * 1024 * 1024       # 5MB per-feed safety cap
-    MAX_CONCURRENT_FEEDS = 25              # Concurrent download workers limit
-    MAX_DNS_WORKERS = 8                    # Concurrent DNS resolution workers limit
-    FEED_WALL_CLOCK_TIMEOUT = 7.0          # Hard wall-clock timeout per feed
-    DNS_CACHE_TTL = 300.0                  # 5 minutes DNS cache validity
-    CIRCUIT_BREAKER_RESET_CYCLES = 5       # Auto-revive dropped feeds every 5 cycles
+    MAX_FEED_BYTES = 5 * 1024 * 1024
+    MAX_CONCURRENT_FEEDS = 25
+    MAX_DNS_WORKERS = 8
+    FEED_WALL_CLOCK_TIMEOUT = 7.0
+    DNS_CACHE_TTL = 300.0
+    CIRCUIT_BREAKER_RESET_CYCLES = 5
     
-    # Strict IPv4 + Port validation regex (Strict octets 0-255, ports 1-65535)
     IPV4_PORT_REGEX = re.compile(
         r'\b(?:(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9][0-9]?)\.)'
         r'(?:(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[0-9]{1,2})\.){2}'
@@ -62,7 +50,6 @@ class HunterConfig:
 
     BLOCKED_HOSTNAMES = {'localhost', '127.0.0.1', '0.0.0.0', '169.254.169.254', '::1'}
 
-    # 55 Verified HTTP/HTTPS & Elite Global Proxy Feeds
     DEFAULT_SOURCES = [
         "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all",
         "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=https&timeout=10000&country=all&ssl=all&anonymity=all",
@@ -121,13 +108,7 @@ class HunterConfig:
         "https://raw.githubusercontent.com/hanwaytech/free-proxy-list/main/https.txt"
     ]
 
-
-# =====================================================================
-# 2. SECURITY LAYER (SSRF, Port Screening, and Safe DNS Resolution)
-# =====================================================================
 class SSRFNetworkShield:
-    """Handles deep network verification, DNS pre-flight, and IP sanitization."""
-    
     def __init__(self, dns_semaphore: asyncio.Semaphore):
         self.dns_semaphore = dns_semaphore
         self._dns_cache: Dict[str, Tuple[bool, float]] = {}
@@ -135,7 +116,6 @@ class SSRFNetworkShield:
 
     @staticmethod
     def is_strictly_global_ip(ip_obj: Union[ipaddress.IPv4Address, ipaddress.IPv6Address]) -> bool:
-        """Ensures IP is strictly routable on the public Internet without version conflicts."""
         if not ip_obj.is_global:
             return False
         if (ip_obj.is_private or ip_obj.is_loopback or ip_obj.is_link_local or 
@@ -146,7 +126,6 @@ class SSRFNetworkShield:
         return True
 
     def filter_public_ips(self, raw_candidates: List[str]) -> Set[str]:
-        """Filters extracted IP:Port strings using sub-microsecond prefix checks."""
         clean_set = set()
         for candidate in raw_candidates:
             try:
@@ -167,7 +146,6 @@ class SSRFNetworkShield:
         return clean_set
 
     async def _resolve_singleflight(self, hostname: str) -> bool:
-        """Deduplicates concurrent DNS queries using IPv4 AF_INET with zero deadlock risk."""
         loop = asyncio.get_running_loop()
         if hostname in self._dns_inflight:
             try:
@@ -208,7 +186,6 @@ class SSRFNetworkShield:
             self._dns_inflight.pop(hostname, None)
 
     async def is_safe_feed_url(self, url: str) -> bool:
-        """Guarantees destination is safe from SSRF and port-reflection attacks."""
         try:
             parsed = urlparse(url)
             if parsed.scheme not in ('http', 'https'):
@@ -243,13 +220,7 @@ class SSRFNetworkShield:
         except Exception:
             return False
 
-
-# =====================================================================
-# 3. SELF-HEALING LAYER (Circuit Breaker and Feed Revival)
-# =====================================================================
 class CircuitBreakerTracker:
-    """Monitors feed health, isolates failing feeds, and auto-revives them."""
-    
     def __init__(self, sources: List[str]):
         self.feed_failures: Dict[str, int] = {url: 0 for url in sources}
         self.cycle_count: int = 0
@@ -267,7 +238,6 @@ class CircuitBreakerTracker:
         return sum(1 for failures in self.feed_failures.values() if failures < 3)
 
     def tick_and_auto_heal(self):
-        """Resets failing feeds periodically to revive recovered endpoints."""
         self.cycle_count += 1
         if self.cycle_count >= HunterConfig.CIRCUIT_BREAKER_RESET_CYCLES:
             self.cycle_count = 0
@@ -277,13 +247,7 @@ class CircuitBreakerTracker:
             for url in self.feed_failures:
                 self.feed_failures[url] = 0
 
-
-# =====================================================================
-# 4. TELEMETRY LAYER (Non-blocking Dashboard Communication)
-# =====================================================================
 class TelemetryDispatcher:
-    """Dispatches real-time telemetry matching main.py and index.html specifications."""
-    
     def __init__(self, ui_callback: Optional[Callable]):
         self.ui_callback = ui_callback
 
@@ -307,16 +271,7 @@ class TelemetryDispatcher:
         except Exception as e:
             logging.debug(f"Telemetry dispatch safely bypassed: {e}")
 
-
-# =====================================================================
-# 5. MASTER ORCHESTRATOR (Engine 1 Core)
-# =====================================================================
 class ProxyHunter:
-    """
-    Engine 1: Fortified High-Velocity Proxy Harvester.
-    Coordinates security shield, circuit breaker, and async workers cleanly.
-    """
-    
     def __init__(self, ui_broadcast_callback: Optional[Callable] = None, **kwargs):
         custom_env = os.environ.get("EXTRA_PROXY_SOURCES", "")
         extra_sources = [s.strip() for s in custom_env.split(",") if s.strip()]
@@ -337,7 +292,6 @@ class ProxyHunter:
         }
 
     async def _fetch_stream(self, curr_url: str, client: httpx.AsyncClient) -> Tuple[int, str, Optional[str]]:
-        """Streams feed safely with binary chunk aggregation and 5MB cap."""
         timeout = httpx.Timeout(connect=3.5, read=4.0, write=3.0, pool=4.0)
         async with client.stream("GET", curr_url, headers=self.headers, timeout=timeout) as response:
             if response.status_code in (301, 302, 307, 308):
@@ -367,7 +321,6 @@ class ProxyHunter:
                 return response.status_code, "", None
 
     async def _scrape_single_source(self, url: str, client: httpx.AsyncClient) -> Set[str]:
-        """Scrapes an individual feed guarded by wall-clock timeout and circuit breaker."""
         if not self.breaker.is_feed_active(url):
             return set()
 
@@ -409,10 +362,6 @@ class ProxyHunter:
                 return set()
 
     async def execute_hunt(self) -> List[str]:
-        """
-        Master Supervisor with Lock Protection:
-        Executes parallel scraping across all 55+ sources with zero socket leaks.
-        """
         async with self.hunt_lock:
             start_time = time.time()
             self.breaker.tick_and_auto_heal()
@@ -464,9 +413,7 @@ class ProxyHunter:
         return await self.execute_hunt()
 
     async def close(self):
-        """Uniform graceful shutdown interface."""
         pass
-
 
 if __name__ == "__main__":
     async def dummy_ui_receiver(packet):
