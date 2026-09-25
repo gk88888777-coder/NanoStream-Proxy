@@ -28,7 +28,7 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
-BASE_URL = os.environ.get("BASE_URL", "https://nanostream4x.duckdns.org")
+BASE_URL = os.environ.get("BASE_URL", "https://nanostream4x.duckdns.org").rstrip('/')
 
 REDIS_HOST = os.environ.get("REDIS_HOST", "127.0.0.1")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
@@ -211,6 +211,20 @@ async def proxy_supply_chain_loop():
         try:
             now = time.time()
             current_ips = await redis_vault_proxies.scard("vip_proxy_pool") or 0
+            
+            # --- 100K VIP Throttling & Auto-Standby Logic ---
+            MAX_VAULT_CAPACITY = 100000
+            RESUME_VAULT_THRESHOLD = 99950
+            if current_ips >= MAX_VAULT_CAPACITY:
+                logging.info(f"[SUPPLY CHAIN] Vault capacity reached ({current_ips:,}/{MAX_VAULT_CAPACITY:,} VIP IPs). Throttling engines to standby mode...")
+                while current_ips > RESUME_VAULT_THRESHOLD:
+                    try:
+                        await asyncio.sleep(15)
+                    except asyncio.CancelledError:
+                        break
+                    current_ips = await redis_vault_proxies.scard("vip_proxy_pool") or 0
+                logging.info(f"[SUPPLY CHAIN] Vault headroom available ({current_ips:,} IPs). Resuming Hunter and Inspector engines...")
+
             min_ips = getattr(doctor, 'minimum_healthy_ips', 50)
             
             is_starved = pool_starvation_event.is_set()
@@ -544,6 +558,8 @@ async def generate_api_key(request: CreateKeyRequest):
             await redis_vault_keys.set(f"api_key_ip:{new_key}", request.bind_ip.strip())
             if request.expiry_seconds and request.expiry_seconds > 0:
                 await redis_vault_keys.expire(f"api_key_ip:{new_key}", request.expiry_seconds)
+        else:
+            await redis_vault_keys.set(f"api_key_ip:{new_key}", "unbound")
 
         await redis_vault_keys.set(f"data_usage_bytes:{new_key}", 0)
         await redis_vault_keys.set(f"request_count:{new_key}", 0)
@@ -552,6 +568,7 @@ async def generate_api_key(request: CreateKeyRequest):
     logging.info(f"KEY GENERATED -> Tier: {clean_tier.upper()} | Slot #{slot_num} | Name: {clean_client_name}")
 
     stream_url = f"{BASE_URL}/gateway/proxy?key={new_key}&target_url="
+    ytdlp_command = f'yt-dlp --add-header "x-api-key: {new_key}" "{BASE_URL}/gateway/proxy?target_url=VIDEO_URL"'
     curl_command = f'curl -H "x-api-key: {new_key}" "{BASE_URL}/gateway/proxy?target_url=https://httpbin.org/ip"'
 
     return {
@@ -566,8 +583,9 @@ async def generate_api_key(request: CreateKeyRequest):
         "purpose": clean_purpose,
         "type": key_type,
         "allocated_rps": "Unlimited (Tier 0)" if allocated_rps == 0 else f"{allocated_rps:,} req/sec",
-        "bound_ip": request.bind_ip.strip() if request.bind_ip else "Unbound (Auto-Bind on 1st use)",
+        "bound_ip": request.bind_ip.strip() if request.bind_ip else "Unbound (Multi-Server / Cluster Ready)",
         "stream_url": stream_url,
+        "ytdlp_cmd": ytdlp_command,
         "curl_cmd": curl_command,
         "curl_command": curl_command
     }
@@ -649,10 +667,10 @@ async def reset_key_ip_lock(request: ResetIpRequest):
     raw_token = clean_target.replace("api_key:", "")
 
     ip_key = f"api_key_ip:{raw_token}"
-    await redis_vault_keys.delete(ip_key)
+    await redis_vault_keys.set(ip_key, "unbound")
     LOCAL_KEY_CACHE.pop(raw_token, None)
-    logging.info(f"ADMIN ACTION -> Reset IP lock for key: {raw_token}")
-    return {"status": "success", "message": f"IP lock cleared for {raw_token}. It will auto-bind to next connection."}
+    logging.info(f"ADMIN ACTION -> Reset IP lock for key: {raw_token} (Set to Unbound)")
+    return {"status": "success", "message": f"IP lock cleared for {raw_token}. It is now unrestricted and cluster-ready."}
 
 @app.post("/admin/keys/revoke", dependencies=[Depends(verify_local_admin_shield)])
 async def revoke_api_key_by_name(request: KeyRevokeRequest):
@@ -763,7 +781,7 @@ async def list_api_keys():
         raw_bytes = results[base_idx + 5]
         raw_reqs = results[base_idx + 6]
         country = results[base_idx + 7] or "🌐 Global / Unspecified"
-        purpose = results[base_idx + 8] or ("Enterprise Media Streaming" if tier == "enterprise" else "IMO / Social / Browsing")
+        purpose = results[base_idx + 8] or ("Enterprise Media / Scraper Core" if tier == "enterprise" else "General Media / API Client")
         raw_slot = results[base_idx + 9]
 
         if ttl == -2 or not client_name:
@@ -790,7 +808,10 @@ async def list_api_keys():
         is_active = (ttl != -2 and bool(client_name))
 
         stream_url = f"{BASE_URL}/gateway/proxy?key={raw_key}&target_url="
+        ytdlp_command = f'yt-dlp --add-header "x-api-key: {raw_key}" "{BASE_URL}/gateway/proxy?target_url=VIDEO_URL"'
         curl_command = f'curl -H "x-api-key: {raw_key}" "{BASE_URL}/gateway/proxy?target_url=https://httpbin.org/ip"'
+
+        display_ip = bound_ip if bound_ip and bound_ip.lower() not in ["unbound", "none", "any", "all", "dynamic"] else "Unbound (Cluster Ready)"
 
         item = {
             "key_id": raw_key,
@@ -810,8 +831,9 @@ async def list_api_keys():
             "total_requests_display": f"{req_count:,}",
             "allocated_rps": rps_display,
             "data_usage": human_data,
-            "bound_ip": bound_ip if bound_ip else "Unbound (Auto-Bind on 1st use)",
+            "bound_ip": display_ip,
             "stream_url": stream_url,
+            "ytdlp_cmd": ytdlp_command,
             "curl_cmd": curl_command,
             "curl_command": curl_command
         }
