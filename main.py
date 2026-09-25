@@ -26,7 +26,7 @@ from core.master4_gateway import (
     close_gateway_resources, 
     pool_starvation_event, 
     LOCAL_KEY_CACHE,
-    start_background_tcp_proxy  # <-- Added to handle 8080 properly from main
+    start_background_tcp_proxy  # Handled directly from main to manage port 8080 cleanly
 )
 
 logging.basicConfig(
@@ -218,23 +218,34 @@ doctor = resilient_instantiate(VaultDoctor, ui_broadcast_callback=ui_dashboard_b
 async def proxy_supply_chain_loop():
     PROACTIVE_HUNT_INTERVAL = 300.0
     last_hunt_time = 0.0
+    
+    # Smart Memory Shield Limits (12 GB Max RAM Limit, 10 GB Resume Threshold)
+    MAX_REDIS_MEMORY_BYTES = 12 * 1024 * 1024 * 1024 
+    RESUME_MEMORY_THRESHOLD_BYTES = 10 * 1024 * 1024 * 1024  
 
     while True:
         try:
             now = time.time()
+            
+            # Check current Redis RAM usage dynamically
+            memory_info = await redis_vault_proxies.info('memory')
+            used_memory = memory_info.get('used_memory', 0)
+            
             current_ips = await redis_vault_proxies.scard("vip_proxy_pool") or 0
             
-            MAX_VAULT_CAPACITY = 100000
-            RESUME_VAULT_THRESHOLD = 99950
-            if current_ips >= MAX_VAULT_CAPACITY:
-                logging.info(f"[SUPPLY CHAIN] Vault capacity reached ({current_ips:,}/{MAX_VAULT_CAPACITY:,} VIP IPs). Throttling engines to standby mode...")
-                while current_ips > RESUME_VAULT_THRESHOLD:
+            # Pause engines automatically if Redis RAM reaches 12GB
+            if used_memory >= MAX_REDIS_MEMORY_BYTES:
+                logging.info(f"[SUPPLY CHAIN MEMORY SHIELD] Redis RAM reached 12GB limit ({used_memory / (1024**3):.2f} GB). Pausing Hunter & Inspector engines to stand by...")
+                
+                while used_memory > RESUME_MEMORY_THRESHOLD_BYTES:
                     try:
                         await asyncio.sleep(15)
+                        memory_info = await redis_vault_proxies.info('memory')
+                        used_memory = memory_info.get('used_memory', 0)
                     except asyncio.CancelledError:
                         break
-                    current_ips = await redis_vault_proxies.scard("vip_proxy_pool") or 0
-                logging.info(f"[SUPPLY CHAIN] Vault headroom available ({current_ips:,} IPs). Resuming Hunter and Inspector engines...")
+                        
+                logging.info(f"[SUPPLY CHAIN MEMORY SHIELD] RAM headroom available ({used_memory / (1024**3):.2f} GB). Automatically resuming engines...")
 
             min_ips = getattr(doctor, 'minimum_healthy_ips', 50)
             
@@ -350,7 +361,7 @@ async def app_lifespan(app_instance: FastAPI):
     task1 = asyncio.create_task(proxy_supply_chain_loop())
     task2 = asyncio.create_task(vault_maintenance_loop())
     
-    # --- CRITICAL FIX: Ensure Engine 4 (TCP Proxy) starts cleanly on 8080 from main ---
+    # Start Engine 4 (TCP Proxy) cleanly on port 8080 from main
     task3 = asyncio.create_task(start_background_tcp_proxy())
     background_worker_tasks.extend([task1, task2, task3])
 
@@ -945,7 +956,7 @@ if __name__ == "__main__":
         # Automatically clean up any stuck ghost processes on the required ports before starting
         os.system(f"fuser -k -9 {WEB_PORT}/tcp >/dev/null 2>&1")
         os.system(f"fuser -k -9 {PROXY_PORT}/tcp >/dev/null 2>&1")
-        time.sleep(1.5)  # Allow OS sufficient time to completely release the port bindings
+        time.sleep(1.5)  # Allow OS sufficient time to completely release port bindings
         logging.info("[AUTO-HEAL] Ports cleared successfully. Starting server...")
     except Exception as e:
         logging.warning(f"[AUTO-HEAL] Port cleanup skipped: {e}")
