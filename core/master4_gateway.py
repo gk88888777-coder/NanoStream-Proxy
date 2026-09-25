@@ -7,11 +7,13 @@ import ssl
 import logging
 import ipaddress
 import warnings
+import re
+import secrets
 from typing import Optional, Tuple, Dict, Any, AsyncIterator
-from urllib.parse import urlparse, unquote
+from urllib.parse import urlparse, unquote, urljoin, quote
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, Response
+from fastapi.responses import StreamingResponse, Response, JSONResponse
 import redis.asyncio as redis
 from cryptography.fernet import Fernet, InvalidToken
 from contextlib import asynccontextmanager
@@ -26,6 +28,8 @@ logging.basicConfig(
     format='%(asctime)s - [ENGINE-4: HYPER-GATEWAY] - %(message)s',
     datefmt='%Y-%m-%d %H:%M:%S'
 )
+
+BASE_URL = os.environ.get("BASE_URL", "https://nanostream4x.duckdns.org").rstrip('/')
 
 SHARED_SSL_CONTEXT = ssl.create_default_context()
 SHARED_SSL_CONTEXT.check_hostname = False
@@ -166,7 +170,7 @@ async def is_forbidden_ip_or_host(hostname: str) -> bool:
 
     try:
         loop = asyncio.get_running_loop()
-        addr_info = await asyncio.wait_for(loop.getaddrinfo(ascii_hostname, None), timeout=2.5)
+        addr_info = await asyncio.wait_for(loop.getaddrinfo(ascii_hostname, None), timeout=4.0)
         for _, _, _, _, sockaddr in addr_info:
             resolved_ip = ipaddress.ip_address(sockaddr[0])
             if (resolved_ip.is_unspecified or resolved_ip.is_private or 
@@ -178,7 +182,7 @@ async def is_forbidden_ip_or_host(hostname: str) -> bool:
         TARGET_DNS_CACHE[hostname] = (False, now + 300.0)
         return False
     except Exception:
-        return True
+        return False
 
 def smart_decode_target_url(raw_url: str) -> str:
     clean_url = raw_url.strip()
@@ -198,7 +202,7 @@ def smart_decode_target_url(raw_url: str) -> str:
 
 async def sanitize_and_validate_target_url(raw_url: str) -> Tuple[str, str]:
     if not raw_url or not isinstance(raw_url, str):
-        raise HTTPException(status_code=400, detail="Bad Request: Target URL parameter is missing.")
+        raise HTTPException(status_code=400, detail="MissingTargetUrl")
     
     clean_url = smart_decode_target_url(raw_url)
     parsed = urlparse(clean_url)
@@ -242,6 +246,34 @@ def sanitize_headers(original_headers: dict) -> dict:
     
     safe_headers['Accept-Encoding'] = 'identity'
     return safe_headers
+
+def rewrite_m3u8_manifest(content: str, base_target_url: str, base_proxy_url: str, auth_key: str, session_id: str) -> str:
+    lines = content.splitlines()
+    rewritten_lines = []
+    uri_pattern = re.compile(r'URI="([^"]+)"')
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped:
+            rewritten_lines.append(line)
+            continue
+
+        if stripped.startswith("#"):
+            if 'URI="' in stripped:
+                def replace_uri(match):
+                    original_uri = match.group(1)
+                    full_uri = urljoin(base_target_url, original_uri)
+                    proxied_uri = f"{base_proxy_url}?key={auth_key}&session={session_id}&target_url={quote(full_uri, safe='')}"
+                    return f'URI="{proxied_uri}"'
+                rewritten_lines.append(uri_pattern.sub(replace_uri, stripped))
+            else:
+                rewritten_lines.append(line)
+        else:
+            full_segment_url = urljoin(base_target_url, stripped)
+            proxied_segment_url = f"{base_proxy_url}?key={auth_key}&session={session_id}&target_url={quote(full_segment_url, safe='')}"
+            rewritten_lines.append(proxied_segment_url)
+
+    return "\n".join(rewritten_lines)
 
 async def proxy_stream_generator(client: httpx.AsyncClient, response: httpx.Response, request: Request, auth_key: Optional[str] = None):
     pending_flush = 0
@@ -326,7 +358,7 @@ async def fetch_single_valid_proxy(session_id: Optional[str] = None) -> Tuple[Op
                 if session_id:
                     token_hex = raw_bytes.hex() if raw_bytes else "none"
                     session_payload = f"{decrypted}|{token_hex}|{clean_ip_port}"
-                    await redis_vault_proxies.setex(f"session_proxy:{session_id}", 180, session_payload)
+                    await redis_vault_proxies.setex(f"session_proxy:{session_id}", 300, session_payload)
 
                 return decrypted, raw_bytes, clean_ip_port
         except Exception:
@@ -335,7 +367,7 @@ async def fetch_single_valid_proxy(session_id: Optional[str] = None) -> Tuple[Op
     pool_starvation_event.set()
     return None, None, None
 
-def extract_clean_target_url(request: Request, raw_target_param: Optional[str], raw_auth_key: Optional[str]) -> str:
+def extract_clean_target_url(request: Request, raw_target_param: Optional[str], raw_auth_key: Optional[str]) -> Optional[str]:
     header_url = request.headers.get("x-target-url") or request.headers.get("X-Target-URL")
     if header_url and header_url.strip():
         return header_url.strip()
@@ -351,19 +383,29 @@ def extract_clean_target_url(request: Request, raw_target_param: Optional[str], 
         parts = raw_query.split(target_marker, 1)
         candidate = parts[1]
         
-        if raw_auth_key:
-            for k in [raw_auth_key, unquote(raw_auth_key)]:
-                for pattern in [f"&key={k}", f"&api_key={k}", f"key={k}&", f"api_key={k}&"]:
-                    if pattern in candidate:
-                        candidate = candidate.replace(pattern, "")
+        changed = True
+        while changed:
+            changed = False
+            if raw_auth_key:
+                for k in [raw_auth_key, unquote(raw_auth_key)]:
+                    for pattern in [f"&key={k}", f"&api_key={k}", f"?key={k}", f"?api_key={k}"]:
+                        if candidate.endswith(pattern):
+                            candidate = candidate[:-len(pattern)]
+                            changed = True
+            session_val = request.query_params.get("session")
+            if session_val:
+                for s_pat in [f"&session={session_val}", f"?session={session_val}"]:
+                    if candidate.endswith(s_pat):
+                        candidate = candidate[:-len(s_pat)]
+                        changed = True
 
-        if candidate:
+        if candidate.strip():
             return smart_decode_target_url(candidate)
 
-    if raw_target_param:
+    if raw_target_param and raw_target_param.strip():
         return smart_decode_target_url(raw_target_param)
 
-    raise HTTPException(status_code=400, detail="Bad Request: Missing 'target_url' parameter or 'X-Target-URL' header.")
+    return None
 
 def normalize_incoming_key(raw_key: str) -> str:
     clean_token = raw_key.strip()
@@ -490,24 +532,27 @@ async def gateway_proxy_handler(
     is_master_passport = (x_api_key in ["gk(GK)321", "GK_Master_Client"])
 
     if not is_master_passport:
-        if not bound_ip:
-            was_set = await redis_vault_keys.set(f"api_key_ip:{x_api_key}", client_ip, nx=True)
-            if was_set:
-                ttl = await redis_vault_keys.ttl(f"api_key:{x_api_key}")
-                if ttl and ttl > 0:
-                    await redis_vault_keys.expire(f"api_key_ip:{x_api_key}", ttl)
-                if x_api_key in LOCAL_KEY_CACHE:
-                    LOCAL_KEY_CACHE[x_api_key]['bound_ip'] = client_ip
-                logging.info(f"[{tier.upper()} LOCK] Client '{client_slot_name}' auto-bound to IP: {client_ip}")
-            else:
-                bound_ip = await redis_vault_keys.get(f"api_key_ip:{x_api_key}")
+        is_explicitly_unbound = (bound_ip and bound_ip.lower() in ["unbound", "none", "any", "all", "dynamic"])
 
-        if bound_ip and bound_ip != client_ip:
-            error_prefix = "Enterprise Server" if tier == "enterprise" else "Device"
-            raise HTTPException(
-                status_code=403, 
-                detail=f"Forbidden: Key is locked to registered {error_prefix} IP ({bound_ip}). Contact admin to reset binding."
-            )
+        if not is_explicitly_unbound:
+            if not bound_ip:
+                was_set = await redis_vault_keys.set(f"api_key_ip:{x_api_key}", client_ip, nx=True)
+                if was_set:
+                    ttl = await redis_vault_keys.ttl(f"api_key:{x_api_key}")
+                    if ttl and ttl > 0:
+                        await redis_vault_keys.expire(f"api_key_ip:{x_api_key}", ttl)
+                    if x_api_key in LOCAL_KEY_CACHE:
+                        LOCAL_KEY_CACHE[x_api_key]['bound_ip'] = client_ip
+                    logging.info(f"[{tier.upper()} LOCK] Client '{client_slot_name}' auto-bound to IP: {client_ip}")
+                else:
+                    bound_ip = await redis_vault_keys.get(f"api_key_ip:{x_api_key}")
+
+            if bound_ip and bound_ip.lower() not in ["unbound", "none", "any", "all", "dynamic"] and bound_ip != client_ip:
+                error_prefix = "Enterprise Server" if tier == "enterprise" else "Device"
+                raise HTTPException(
+                    status_code=403, 
+                    detail=f"Forbidden: Key is locked to registered {error_prefix} IP ({bound_ip}). Contact admin to reset binding."
+                )
 
         current_second = int(time.time())
         if tier == "enterprise":
@@ -525,19 +570,43 @@ async def gateway_proxy_handler(
             if count == 1:
                 await redis_vault_keys.expire(rate_key, 2)
             
-            if count > (std_limit * 3):
-                await redis_vault_keys.setex(f"auto_blocked_ip:{client_ip}", 900, "std_flood_exceeded")
-                raise HTTPException(status_code=403, detail=f"Forbidden: Heavy attack detected. IP Quarantined for 15 minutes.")
-            elif count > std_limit:
+            if count > std_limit:
                 raise HTTPException(status_code=429, detail=f"Too Many Requests: Standard quota exceeded (Max {std_limit} req/sec). Slow down.")
 
     resolved_raw_url = extract_clean_target_url(request, target_url, raw_key)
-    final_target_url, target_domain = await sanitize_and_validate_target_url(resolved_raw_url)
-    session_id = request.headers.get("x-session-id") or request.query_params.get("session")
+    
+    if not resolved_raw_url:
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "online",
+                "gateway": "NanoStream 4X Hyper-Scale Gateway",
+                "tunnel_state": "ACTIVE_AND_READY",
+                "client_slot": client_slot_name,
+                "tier": tier,
+                "allocated_capacity": f"{allocated_rps:,} req/sec" if allocated_rps > 0 else "Unlimited",
+                "client_ip": client_ip,
+                "instructions": "Tunnel is connected. Append '&target_url=YOUR_URL' or send 'x-target-url' header to stream data."
+            }
+        )
 
-    request_content = request.stream() if request.method in ["POST", "PUT", "PATCH"] else None
+    final_target_url, target_domain = await sanitize_and_validate_target_url(resolved_raw_url)
+    
+    session_id = request.headers.get("x-session-id") or request.query_params.get("session")
+    if not session_id and (final_target_url.lower().endswith(".m3u8") or ".ts" in final_target_url.lower()):
+        session_id = f"sess_{secrets.token_hex(8)}"
+
+    request_body = None
+    if request.method in ["POST", "PUT", "PATCH"]:
+        request_body = await request.body()
+
     camouflaged_headers = sanitize_headers(request.headers)
-    SAFE_TIMEOUT = httpx.Timeout(connect=3.5, read=7200.0, write=15.0, pool=15.0)
+    
+    incoming_range = request.headers.get("range") or request.headers.get("Range")
+    if incoming_range:
+        camouflaged_headers["Range"] = incoming_range
+
+    SAFE_TIMEOUT = httpx.Timeout(connect=5.0, read=7200.0, write=30.0, pool=30.0)
 
     last_network_error = None
     for proxy_attempt in range(3):
@@ -553,13 +622,18 @@ async def gateway_proxy_handler(
                 verify=SHARED_SSL_CONTEXT, 
                 limits=httpx.Limits(max_keepalive_connections=0, max_connections=1)
             )
-            proxy_client = httpx.AsyncClient(transport=transport, timeout=SAFE_TIMEOUT, follow_redirects=False)
+            proxy_client = httpx.AsyncClient(
+                transport=transport, 
+                timeout=SAFE_TIMEOUT, 
+                follow_redirects=True, 
+                max_redirects=10
+            )
             
             req = proxy_client.build_request(
                 method=request.method,
                 url=final_target_url,
                 headers=camouflaged_headers,
-                content=request_content,
+                content=request_body,
             )
             upstream_response = await proxy_client.send(req, stream=True)
 
@@ -583,10 +657,10 @@ async def gateway_proxy_handler(
             
             excluded_headers = {
                 'connection', 'keep-alive', 'proxy-authenticate', 'proxy-authorization',
-                'te', 'trailers', 'transfer-encoding', 'upgrade', 'content-encoding',
+                'te', 'trailers', 'transfer-encoding', 'upgrade',
                 'access-control-allow-origin', 'access-control-allow-credentials',
                 'access-control-allow-methods', 'access-control-allow-headers',
-                'content-type', 'via', 'x-cache'
+                'via', 'x-cache'
             }
             
             if upstream_response.status_code != 206 and 'content-range' not in upstream_response.headers:
@@ -608,6 +682,35 @@ async def gateway_proxy_handler(
                 final_target_url, 
                 upstream_response.headers.get("content-type")
             )
+
+            is_m3u8 = (
+                final_target_url.lower().endswith(".m3u8") or 
+                "mpegurl" in (upstream_response.headers.get("content-type") or "").lower()
+            )
+            if is_m3u8 and upstream_response.status_code == 200:
+                raw_m3u8_bytes = await upstream_response.aread()
+                await upstream_response.aclose()
+                await proxy_client.aclose()
+                
+                base_gateway_url = f"{BASE_URL}/gateway/proxy"
+                active_sess = session_id or f"sess_{secrets.token_hex(8)}"
+                rewritten_m3u8 = rewrite_m3u8_manifest(
+                    raw_m3u8_bytes.decode('utf-8', errors='ignore'),
+                    final_target_url,
+                    base_gateway_url,
+                    x_api_key,
+                    active_sess
+                )
+                
+                response_headers['Content-Type'] = 'application/vnd.apple.mpegurl'
+                response_headers['Content-Length'] = str(len(rewritten_m3u8.encode('utf-8')))
+                
+                return Response(
+                    content=rewritten_m3u8,
+                    status_code=200,
+                    headers=response_headers,
+                    media_type="application/vnd.apple.mpegurl"
+                )
 
             if request.method == "HEAD" or upstream_response.status_code in [204, 304]:
                 await upstream_response.aclose()
