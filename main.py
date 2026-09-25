@@ -26,7 +26,8 @@ from core.master4_gateway import (
     close_gateway_resources, 
     pool_starvation_event, 
     LOCAL_KEY_CACHE,
-    start_background_tcp_proxy  
+    start_background_tcp_proxy,
+    set_ui_broadcaster  # <-- एडेड: गेटवे को डैशबोर्ड से लिंक करने के लिए
 )
 
 logging.basicConfig(
@@ -210,6 +211,7 @@ def resilient_instantiate(cls, **kwargs):
             return cls()
 
 gateway_app.state.ui_broadcast = ui_dashboard_broadcaster
+set_ui_broadcaster(ui_dashboard_broadcaster)  # <-- एडेड: यह लाइन गेटवे को टेलीमेट्री भेजने की अनुमति देगी
 
 hunter = resilient_instantiate(ProxyHunter, ui_broadcast_callback=ui_dashboard_broadcaster)
 inspector = resilient_instantiate(ProxyInspector, ui_broadcast_callback=ui_dashboard_broadcaster)
