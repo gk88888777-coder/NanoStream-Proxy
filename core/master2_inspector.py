@@ -1,10 +1,3 @@
-"""
-Engine 2: Master Proxy Inspector (Hyperscale Continuous Queue Edition)
-Architecture: Dual-Layer Origin Shield (LAN + WAN), Continuous Worker Pool (Zero HoL Blocking),
-O(1) Redis Shadow Index, Shared Pre-warmed SSL Context, and Atomic Bulk Storage.
-Compatibility: 100% verified with Engine 1, Engine 3, Engine 4, and main.py.
-"""
-
 import asyncio
 import httpx
 import logging
@@ -29,25 +22,19 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
-# Synchronized Shared Key across Engines 2, 3, 4 and main.py
 DEFAULT_FIXED_KEY = "W3z9Lp7m1n4b6v8c0x3z5l7j9h1g3f5d7s9a2p4q6w8="
 ENCRYPTION_KEY = os.environ.get("PROXY_ENCRYPTION_KEY", DEFAULT_FIXED_KEY)
 cipher_suite = Fernet(ENCRYPTION_KEY.encode('utf-8'))
 
-# Global Pre-warmed SSL Context (Zero Disk-I/O overhead under high concurrency)
 SHARED_SSL_CONTEXT = ssl.create_default_context()
 SHARED_SSL_CONTEXT.check_hostname = False
 SHARED_SSL_CONTEXT.verify_mode = ssl.CERT_NONE
 
-
-# =====================================================================
-# 1. CONFIGURATION LAYER
-# =====================================================================
 class InspectorConfig:
     MAX_CONCURRENT_WORKERS = int(os.environ.get("INSPECTOR_CONCURRENCY", 200))
-    INSPECTION_TIMEOUT = 4.5           # High-throughput latency cutoff
-    CONNECT_TIMEOUT = 2.5              # Strict socket connect limit
-    REDIS_PIPELINE_CHUNK = 250         # Batch size for atomic Redis pipeline writes
+    INSPECTION_TIMEOUT = 4.5
+    CONNECT_TIMEOUT = 2.5
+    REDIS_PIPELINE_CHUNK = 250
     
     CGNAT_NETWORK = ipaddress.IPv4Network('100.64.0.0/10')
     DANGEROUS_PORTS = {21, 22, 23, 25, 53, 110, 135, 137, 138, 139, 143, 445, 
@@ -60,7 +47,6 @@ class InspectorConfig:
         "Connection": "close"
     }
 
-    # AWS & Cloudflare backed zero-downtime test endpoints
     TEST_ENDPOINTS = [
         {"url": "http://checkip.amazonaws.com", "type": "plain"},
         {"url": "http://api.ipify.org?format=json", "type": "ipify"},
@@ -68,20 +54,13 @@ class InspectorConfig:
         {"url": "http://httpbin.org/ip", "type": "httpbin"}
     ]
 
-
-# =====================================================================
-# 2. VALIDATION & SECURITY LAYER (Dual-Layer Origin Shield)
-# =====================================================================
 class ProxyValidator:
-    """Handles deep network verification, latency enforcement, and dual-layer origin masking."""
-    
     def __init__(self):
         self.origin_ips: Set[str] = set()
         self._origin_last_checked = 0.0
 
     @staticmethod
     def sanitize_proxy_address(raw_str: str) -> Optional[str]:
-        """Strips protocol prefixes, paths, and validates IP:Port syntax."""
         cleaned = raw_str.strip().lower()
         if cleaned.startswith("http://"):
             cleaned = cleaned[7:]
@@ -108,16 +87,10 @@ class ProxyValidator:
             return None
 
     async def fetch_host_origin_ips(self) -> bool:
-        """
-        Dual-Layer Origin Discovery:
-        1. Fast OS socket routing probe to detect Docker / LAN interface IP.
-        2. External HTTP probe to detect Public WAN gateway IP.
-        """
         now = time.time()
         if self.origin_ips and (now - self._origin_last_checked < 3600.0):
             return True
 
-        # Layer 1: Local Docker/LAN interface discovery via UDP probe
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
                 s.connect(("1.1.1.1", 80))
@@ -127,7 +100,6 @@ class ProxyValidator:
         except Exception:
             pass
 
-        # Layer 2: Public WAN IP discovery via verified endpoints
         for target in InspectorConfig.TEST_ENDPOINTS:
             try:
                 async with httpx.AsyncClient(timeout=3.0, verify=SHARED_SSL_CONTEXT) as client:
@@ -145,7 +117,6 @@ class ProxyValidator:
         return len(self.origin_ips) > 0
 
     def _verify_anonymity_strict(self, content: str, target_type: str) -> bool:
-        """Mathematical verification ensuring proxy masks both LAN and WAN origin IPs."""
         try:
             detected_ip = None
             if target_type == "plain":
@@ -158,14 +129,13 @@ class ProxyValidator:
             elif target_type == "httpbin":
                 data = json.loads(content)
                 origin = data.get("origin", "")
-                if "," in origin:  # Transparent proxy leaking via X-Forwarded-For
+                if "," in origin:
                     return False
                 detected_ip = origin.strip()
 
             if not detected_ip:
                 return False
 
-            # Strict Leak Prevention: Neither local interface nor public WAN IP may leak
             for origin in self.origin_ips:
                 if origin in detected_ip or detected_ip == origin:
                     return False
@@ -179,7 +149,6 @@ class ProxyValidator:
             return False
 
     async def test_proxy(self, clean_ip_port: str) -> Optional[str]:
-        """Validates proxy routing, latency, and origin masking within 4.5 seconds."""
         target = random.choice(InspectorConfig.TEST_ENDPOINTS)
         proxy_url = f"http://{clean_ip_port}"
         
@@ -201,22 +170,11 @@ class ProxyValidator:
             pass
         return None
 
-
-# =====================================================================
-# 3. VAULT STORAGE LAYER (O(1) Shadow Index & Atomic Pipelines)
-# =====================================================================
 class VaultStorageManager:
-    """Manages O(1) deduplication via 'vip_proxy_ips' shadow index and encrypted storage in 'vip_proxy_pool'."""
-    
     def __init__(self, redis_client: redis.Redis):
         self.redis = redis_client
 
     async def store_elite_proxies(self, elite_ips: List[str]) -> int:
-        """
-        O(1) Atomic Deduplication:
-        Checks existence in 'vip_proxy_ips' without decrypting existing tokens.
-        Stores newly discovered elite proxies in both sets atomically.
-        """
         if not elite_ips:
             return 0
 
@@ -226,7 +184,6 @@ class VaultStorageManager:
         for i in range(0, len(elite_ips), chunk_size):
             chunk = elite_ips[i:i + chunk_size]
             
-            # Step A: Query existing membership in O(1) per IP
             async with self.redis.pipeline(transaction=False) as check_pipe:
                 for ip in chunk:
                     check_pipe.sismember("vip_proxy_ips", ip.encode('utf-8'))
@@ -236,7 +193,6 @@ class VaultStorageManager:
             if not new_ips:
                 continue
 
-            # Step B: Atomically add to both Shadow Index (plain IP) and Vault (encrypted token)
             async with self.redis.pipeline(transaction=False) as store_pipe:
                 for ip in new_ips:
                     try:
@@ -250,13 +206,7 @@ class VaultStorageManager:
 
         return stored_count
 
-
-# =====================================================================
-# 4. TELEMETRY LAYER (Non-blocking Dashboard Communication)
-# =====================================================================
 class InspectorTelemetry:
-    """Dispatches live metrics strictly matching main.py & index.html specifications."""
-    
     def __init__(self, ui_callback: Optional[Callable]):
         self.ui_callback = ui_callback
 
@@ -280,17 +230,7 @@ class InspectorTelemetry:
         except Exception as e:
             logging.debug(f"Telemetry non-critical bypass: {e}")
 
-
-# =====================================================================
-# 5. MASTER ORCHESTRATOR (Engine 2 Core - Continuous Queue Pipeline)
-# =====================================================================
 class ProxyInspector:
-    """
-    Engine 2: Hyperscale Continuous Queue Inspector.
-    Drives 200 persistent async workers over an asyncio.Queue, completely eliminating
-    batch head-of-line stalls and maximizing throughput.
-    """
-    
     def __init__(self, ui_broadcast_callback: Optional[Callable] = None, **kwargs):
         REDIS_HOST = os.environ.get("REDIS_HOST", "127.0.0.1")
         REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
@@ -316,7 +256,6 @@ class ProxyInspector:
         self._is_closed = False
 
     async def execute_inspection(self, raw_ips_list: List[str]) -> List[str]:
-        """Runs continuous worker pipeline over raw IPs with real-time streaming telemetry."""
         async with self.lock:
             sanitized_candidates = set()
             for raw in raw_ips_list:
@@ -391,12 +330,10 @@ class ProxyInspector:
         return await self.execute_inspection(raw_ips_list)
 
     async def close(self):
-        """Clean resource deallocation for graceful shutdown."""
         if not self._is_closed:
             self._is_closed = True
             await self.redis_vault.aclose()
             await self.pool.disconnect()
-
 
 if __name__ == "__main__":
     async def dummy_ui_receiver(data):
