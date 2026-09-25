@@ -17,10 +17,10 @@
         .mono { font-family: 'JetBrains Mono', monospace; }
         
         .glass-panel { 
-            background: rgba(255, 255, 255, 0.75); 
+            background: rgba(255, 255, 255, 0.78); 
             backdrop-filter: blur(16px); 
             -webkit-backdrop-filter: blur(16px);
-            border: 1px solid rgba(255, 255, 255, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.65);
             box-shadow: 0 10px 30px rgba(80, 55, 15, 0.12);
         }
         
@@ -36,7 +36,15 @@
         .engine-card:hover { 
             transform: translateY(-4px); 
             box-shadow: 0 16px 35px rgba(90, 60, 20, 0.18);
-            background: rgba(255, 255, 255, 0.9);
+            background: rgba(255, 255, 255, 0.92);
+        }
+
+        .slot-banner {
+            transition: all 0.2s ease-in-out;
+        }
+        .slot-banner:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 22px rgba(30, 58, 138, 0.12);
         }
     </style>
 </head>
@@ -50,18 +58,18 @@
             </div>
             <div>
                 <h2 class="text-base mono text-amber-950 font-extrabold uppercase tracking-wider">Executive Command Security</h2>
-                <p class="text-xs text-amber-900/80 mt-1 mono">Enter Admin Password to Access System</p>
+                <p class="text-xs text-amber-900/80 mt-1 mono">Enter Admin Master Key synced with main.py</p>
             </div>
             <div class="space-y-3">
-                <input type="password" id="master-auth-key" autocomplete="new-password" placeholder="Enter Admin Password" 
+                <input type="password" id="master-auth-key" autocomplete="new-password" placeholder="Enter Admin Master Key" 
                     onkeydown="if(event.key==='Enter') authenticateSystem()"
                     class="w-full bg-white/90 border border-amber-900/30 rounded-xl px-4 py-3 text-xs mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-800/50 text-center font-bold">
-                <button onclick="authenticateSystem()" 
+                <button onclick="authenticateSystem()" id="btn-unlock"
                     class="w-full py-3 bg-amber-800 hover:bg-amber-900 text-white font-extrabold text-xs mono rounded-xl shadow-lg transition-all">
                     Unlock Control Room 🔓
                 </button>
             </div>
-            <p id="auth-error-msg" class="text-[11px] text-rose-700 font-bold mono hidden">❌ Invalid Admin Password!</p>
+            <p id="auth-error-msg" class="text-[11px] text-rose-700 font-bold mono hidden">❌ Access Denied!</p>
         </div>
     </div>
 
@@ -75,38 +83,64 @@
                     <span class="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-pulse"></span>
                     <h1 class="text-xs font-extrabold tracking-widest text-amber-950 uppercase mono">NANOSTREAM 4X // EXECUTIVE COMMAND</h1>
                 </div>
-                <p class="text-[11px] mono text-amber-900/80 font-medium">Enterprise Proxy Gateway & Vault Control</p>
+                <p class="text-[11px] mono text-amber-900/80 font-medium">Hyper-Scale Enterprise Gateway // Dynamic Fleet Management</p>
             </div>
             <div class="flex gap-2 bg-amber-950/5 p-1.5 rounded-xl border border-amber-950/10">
                 <button onclick="switchScreen('command')" id="btn-cmd" class="px-4 py-2 rounded-lg text-xs mono font-bold bg-blue-600 text-white shadow-md transition-all">Command Center</button>
-                <button onclick="switchScreen('vault')" id="btn-vault" class="px-4 py-2 rounded-lg text-xs mono font-bold text-amber-950 hover:bg-amber-950/10 transition-all">Vault & Admin</button>
+                <button onclick="switchScreen('vault')" id="btn-vault" class="px-4 py-2 rounded-lg text-xs mono font-bold text-amber-950 hover:bg-amber-950/10 transition-all">Vault & Slots</button>
             </div>
         </header>
 
         <!-- Command Center Screen -->
         <section id="screen-command" class="space-y-4">
             
-            <!-- 📦 Production-Ready Vault Storage & Redis 128 GB Capacity Widgets -->
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div class="glass-panel p-4 rounded-2xl flex items-center justify-between shadow-sm border border-amber-900/20">
                     <div>
-                        <span class="text-[10px] mono text-amber-900/80 font-extrabold uppercase tracking-wider">Vault Storage IPs</span>
+                        <span class="text-[10px] mono text-amber-900/80 font-extrabold uppercase tracking-wider">Vault Storage (DB 0)</span>
                         <h3 class="text-xs mono text-amber-950 font-extrabold mt-0.5">
-                            Ready IPs: <span id="ui-vault-total-ips" class="text-emerald-700 bg-emerald-500/10 px-2 py-0.5 rounded text-sm font-black">--</span>
+                            Healthy VIP IPs: <span id="ui-vault-total-ips" class="text-emerald-700 bg-emerald-500/10 px-2 py-0.5 rounded text-sm font-black">--</span>
                         </h3>
                     </div>
                     <div class="w-9 h-9 rounded-xl bg-amber-900/10 flex items-center justify-center text-amber-950 font-bold">📦</div>
                 </div>
                 <div class="glass-panel p-4 rounded-2xl flex items-center justify-between shadow-sm border border-amber-900/20">
                     <div>
-                        <span class="text-[10px] mono text-amber-900/80 font-extrabold uppercase tracking-wider">Redis Storage Capacity</span>
+                        <span class="text-[10px] mono text-amber-900/80 font-extrabold uppercase tracking-wider">Multi-Fleet Dynamic Capacity</span>
                         <h3 class="text-xs mono text-amber-950 font-extrabold mt-0.5">
-                            Size: <span id="ui-storage-capacity" class="text-blue-700 bg-blue-500/10 px-2 py-0.5 rounded text-sm font-black">128 GB</span> 
-                            <span class="text-[10px] text-slate-600 ml-1">(Used: <span id="ui-storage-used" class="text-emerald-700 font-bold">--</span>)</span>
+                            Companies: <span id="ui-enterprise-slots" class="text-blue-700 font-black">--</span> | Retail: <span id="ui-standard-slots" class="text-amber-800 font-black">--</span>
                         </h3>
                     </div>
                     <div class="w-9 h-9 rounded-xl bg-blue-600/10 flex items-center justify-center text-blue-700 font-bold">⚡</div>
                 </div>
+            </div>
+
+            <!-- Instant Stream / Proxy Probe Tool -->
+            <div class="glass-panel p-4 rounded-2xl border border-amber-900/20 space-y-3">
+                <div class="flex justify-between items-center text-xs mono">
+                    <span class="font-bold text-amber-950 flex items-center gap-1.5">
+                        <span>🎯</span> Instant Proxy Stream Probe (Live Engine 4 Test)
+                    </span>
+                    <span id="probe-status" class="text-[10px] text-slate-500">Ready to test</span>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                    <div class="sm:col-span-4">
+                        <select id="probe-selected-key" class="w-full bg-white/90 border border-amber-900/20 rounded-xl px-3 py-2 text-xs mono focus:outline-none font-bold text-amber-950">
+                            <option value="">Select active key</option>
+                        </select>
+                    </div>
+                    <div class="sm:col-span-6">
+                        <input type="text" id="probe-target-url" value="https://httpbin.org/ip" placeholder="Target URL (e.g. https://httpbin.org/ip or .m3u8)" 
+                            class="w-full bg-white/90 border border-amber-900/20 rounded-xl px-3 py-2 text-xs mono focus:outline-none">
+                    </div>
+                    <div class="sm:col-span-2">
+                        <button onclick="executeProxyProbe()" id="btn-probe" 
+                            class="w-full py-2 bg-amber-900 hover:bg-amber-950 text-white font-bold text-xs mono rounded-xl shadow transition-all">
+                            Run Test 🚀
+                        </button>
+                    </div>
+                </div>
+                <div id="probe-result-box" class="hidden bg-slate-900 text-emerald-400 p-2.5 rounded-xl text-[11px] mono overflow-x-auto"></div>
             </div>
 
             <div class="flex justify-between items-center px-1">
@@ -118,7 +152,7 @@
                 </span>
             </div>
 
-            <!-- 4 Engines -->
+            <!-- 4 Engines Grid -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 
                 <!-- Engine 1 -->
@@ -145,7 +179,7 @@
                     <div class="space-y-1.5 text-xs mono text-slate-700 bg-white/60 p-3 rounded-xl border border-purple-500/10">
                         <div class="flex justify-between"><span>IPs Tested:</span> <span id="ui-eng2-tested" class="text-slate-900">--</span></div>
                         <div class="flex justify-between"><span>Elite Passed:</span> <span id="ui-eng2-passed" class="text-purple-700 font-bold">--</span></div>
-                        <div class="flex justify-between"><span>Vault Status:</span> <span id="ui-eng2-vault" class="text-emerald-700 font-bold">--</span></div>
+                        <div class="flex justify-between"><span>Vault Pool Status:</span> <span id="ui-eng2-vault" class="text-emerald-700 font-bold">--</span></div>
                     </div>
                 </div>
 
@@ -169,10 +203,11 @@
                         <span class="text-pink-700 font-extrabold tracking-wide">ENGINE 4: GATEWAY</span>
                         <span id="badge-eng4" class="px-2 py-0.5 rounded-md text-[10px] font-bold bg-rose-500/20 text-rose-800">Deactivated</span>
                     </div>
-                    <h3 class="font-bold text-base text-slate-900 mb-2">Ultra-Gateway</h3>
+                    <h3 class="font-bold text-base text-slate-900 mb-2">Ultra-Gateway Core</h3>
                     <div class="space-y-1.5 text-xs mono text-slate-700 bg-white/60 p-3 rounded-xl border border-pink-500/10">
                         <div class="flex justify-between"><span>Active Client:</span> <span id="ui-eng4-client" class="text-slate-900 font-bold">--</span></div>
-                        <div class="flex justify-between"><span>Throughput:</span> <span id="ui-eng4-throughput" class="text-pink-700 font-bold">--</span></div>
+                        <div class="flex justify-between"><span>Target Domain:</span> <span id="ui-eng4-domain" class="text-indigo-700 font-bold">--</span></div>
+                        <div class="flex justify-between"><span>Live Latency:</span> <span id="ui-eng4-throughput" class="text-pink-700 font-bold">--</span></div>
                         <div class="flex justify-between"><span>HTTP Status:</span> <span id="ui-eng4-http" class="text-slate-500 font-bold">--</span></div>
                     </div>
                 </div>
@@ -180,107 +215,548 @@
             </div>
         </section>
 
-        <!-- Vault & Admin Screen -->
-        <section id="screen-vault" class="space-y-4 hidden">
-            <div class="glass-panel p-4 md:p-6 rounded-3xl shadow-xl w-full overflow-hidden">
-                <div class="flex justify-between items-center border-b border-amber-900/20 pb-3 mb-4">
-                    <h4 class="text-sm mono text-amber-950 font-extrabold uppercase">🔑 Key Control Center</h4>
-                    <button onclick="lockSystem()" class="text-[11px] bg-rose-600/10 text-rose-700 px-3 py-1.5 rounded-lg border border-rose-600/20 font-bold">Lock Control Room 🔒</button>
+        <!-- Vault & Keys Screen: TWO INDEPENDENT FLEETS -->
+        <section id="screen-vault" class="space-y-8 hidden">
+
+            <!-- 👑 SECURE MASTER ROOT PASSPORT CARD -->
+            <div id="master-passport-card" class="glass-panel p-4 rounded-2xl border-2 border-amber-600/50 bg-amber-500/10 hidden flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                <div class="flex items-center gap-2.5">
+                    <span class="text-xl">👑</span>
+                    <div>
+                        <span class="font-black text-amber-950 text-xs uppercase tracking-wider block">Master Root Passport (Permanent Super-Admin Key)</span>
+                        <span class="text-[10px] text-slate-600 mono">Key: <code class="bg-amber-200 px-1 rounded font-bold text-amber-950" id="master-passport-key-display">--</code> | Live Data: <b id="master-passport-data" class="text-blue-700 font-extrabold">0.0 MB</b> | Immunity: Infinite Throughput</span>
+                    </div>
                 </div>
-                
-                <!-- Generate Key Form -->
-                <div class="bg-amber-900/5 p-4 rounded-xl border border-amber-900/10 mb-4 flex flex-col gap-3 w-full">
-                    <div class="flex flex-col sm:flex-row gap-2 w-full">
-                        <input type="text" id="new-client-name" placeholder="Client Name" class="w-full sm:flex-1 bg-white border border-amber-900/20 rounded-lg px-3 py-2 text-xs mono focus:outline-none">
-                        <input type="text" id="new-custom-key" placeholder="Custom Key (Optional)" class="w-full sm:flex-1 bg-white border border-amber-900/20 rounded-lg px-3 py-2 text-xs mono focus:outline-none">
+                <div class="flex gap-1.5 w-full sm:w-auto justify-end">
+                    <button id="btn-copy-master-url" class="px-2.5 py-1 bg-amber-800 text-white font-bold text-[10px] rounded-lg shadow-sm">🔗 Master URL</button>
+                    <button id="btn-copy-master-curl" class="px-2.5 py-1 bg-blue-600 text-white font-bold text-[10px] rounded-lg shadow-sm">📋 Master Curl</button>
+                </div>
+            </div>
+            
+            <!-- ==================================================================== -->
+            <!-- 🏢 SECTION A: ENTERPRISE FLEET -->
+            <!-- ==================================================================== -->
+            <div class="glass-panel p-5 md:p-6 rounded-3xl shadow-xl border-2 border-blue-500/40 space-y-5">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-blue-500/20 pb-3 gap-2">
+                    <div>
+                        <h3 class="text-sm mono text-blue-950 font-black uppercase flex items-center gap-2">
+                            <span>🏢</span> Enterprise Company Fleet
+                        </h3>
+                        <p class="text-[11px] mono text-slate-600">Major Software Companies (Heavy 5,000+ RPS Streaming & Download Load)</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span id="enterprise-badge-count" class="text-xs mono font-black text-white bg-blue-600 px-3 py-1 rounded-xl shadow-sm">-- Slots Used</span>
+                        <button onclick="openSystemScalerModal()" class="text-[11px] bg-blue-100 hover:bg-blue-200 text-blue-950 px-2.5 py-1 rounded-xl font-bold transition-all" title="Scale Fleet Capacity">⚙️ Scale Fleet</button>
+                    </div>
+                </div>
+
+                <!-- Enterprise Creation Form -->
+                <div class="bg-blue-50/70 p-4 rounded-2xl border border-blue-500/20 space-y-3">
+                    <span class="text-xs mono font-extrabold text-blue-950 block">➕ Issue Key for an Enterprise Slot</span>
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <input type="text" id="ent-company-name" placeholder="Company Name (e.g. MediaApp Global)" class="bg-white border border-blue-500/30 rounded-xl px-3 py-2 text-xs mono focus:outline-none">
+                        <input type="text" id="ent-country-location" placeholder="Country / Region (e.g. 🇺🇸 USA, California)" class="bg-white border border-blue-500/30 rounded-xl px-3 py-2 text-xs mono focus:outline-none">
+                        <input type="text" id="ent-custom-key" placeholder="Custom Key (Optional)" class="bg-white border border-blue-500/30 rounded-xl px-3 py-2 text-xs mono focus:outline-none">
                     </div>
                     
-                    <!-- Expiry Date, Time & Lifetime Selection -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <input type="text" id="ent-server-ip" placeholder="Company Backend Server IP (Optional, Auto-Locks on 1st use)" class="bg-white border border-blue-500/30 rounded-xl px-3 py-2 text-xs mono focus:outline-none">
+                        <div class="flex items-center gap-2 bg-white border border-blue-500/30 rounded-xl px-3 py-2">
+                            <span class="text-[11px] mono text-blue-950 font-bold whitespace-nowrap">Capacity:</span>
+                            <select id="ent-allocated-rps" class="w-full bg-transparent text-xs mono font-bold text-blue-950 focus:outline-none">
+                                <option value="5000">⚡ 5,000 req/sec Tier</option>
+                                <option value="10000" selected>🚀 10,000 req/sec Tier</option>
+                                <option value="25000">🔥 25,000 req/sec Tier</option>
+                                <option value="0">👑 Unlimited Tier (No Cap)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row gap-2 items-center w-full pt-1 border-t border-blue-500/20">
+                        <div class="flex items-center gap-1.5 w-full sm:w-auto">
+                            <span class="text-[11px] mono text-blue-950 font-bold whitespace-nowrap">📅 Calendar Expiry:</span>
+                            <input type="datetime-local" id="ent-calendar-date" class="w-full sm:w-auto bg-white border border-blue-500/30 rounded-lg px-2.5 py-1.5 text-xs mono focus:outline-none font-bold text-slate-800">
+                        </div>
+                        <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
+                            <label class="flex items-center gap-1 cursor-pointer text-[11px] mono font-bold text-blue-950">
+                                <input type="checkbox" id="ent-is-lifetime" onchange="toggleEntExpiry()" class="rounded border-blue-500/30"> Permanent Lifetime
+                            </label>
+                            <button onclick="generateEnterpriseKey()" id="btn-generate-ent" class="w-full sm:w-auto px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs mono rounded-xl shadow-md transition-all">Assign to Company Slot</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dynamic Visual Company Slots -->
+                <div class="space-y-2.5">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs mono font-extrabold text-blue-950 uppercase tracking-wider">📋 Enterprise Slots Matrix (Click to Open Dossier):</span>
+                    </div>
+                    <div id="enterprise-keys-list" class="space-y-2.5"></div>
+                </div>
+            </div>
+
+            <!-- ==================================================================== -->
+            <!-- 📱 SECTION B: DYNAMIC RETAIL / STANDARD FLEET -->
+            <!-- ==================================================================== -->
+            <div class="glass-panel p-5 md:p-6 rounded-3xl shadow-xl border-2 border-amber-900/30 space-y-5">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-amber-900/20 pb-3 gap-2">
+                    <div>
+                        <h3 class="text-sm mono text-amber-950 font-black uppercase flex items-center gap-2">
+                            <span>📱</span> Standard / Retail Fleet (Dynamic Utility Slots)
+                        </h3>
+                        <p class="text-[11px] mono text-slate-600">Numbered Slots for IMO, Amazon, Web Scraping, Testing, & Tooling (Protected by 15 RPS Shield)</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span id="standard-badge-count" class="text-xs mono font-black text-white bg-amber-800 px-3 py-1 rounded-xl shadow-sm">-- Slots Used</span>
+                        <button onclick="lockSystem()" class="text-[11px] bg-rose-600/10 text-rose-700 px-3 py-1 rounded-lg border border-rose-600/20 font-bold hover:bg-rose-600 hover:text-white transition-all">Lock 🔒</button>
+                    </div>
+                </div>
+
+                <!-- Retail Creation Form with Comprehensive Purpose Selector -->
+                <div class="bg-amber-900/5 p-4 rounded-2xl border border-amber-900/10 space-y-3">
+                    <span class="text-xs mono font-extrabold text-amber-950 block">➕ Issue Key for a Utility / Retail Slot</span>
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        <input type="text" id="std-client-name" placeholder="User / Tool Name (e.g. Ramesh IMO / Scraper Tool)" class="bg-white border border-amber-900/20 rounded-xl px-3 py-2 text-xs mono focus:outline-none">
+                        
+                        <div class="flex items-center bg-white border border-amber-900/20 rounded-xl px-3 py-2">
+                            <select id="std-purpose" class="w-full bg-transparent text-xs mono font-bold text-amber-950 focus:outline-none">
+                                <option value="📞 IMO Video & Audio Calling">📞 IMO Video & Audio Calling</option>
+                                <option value="🛒 Amazon & E-Commerce Scraping">🛒 Amazon & E-Commerce Scraping</option>
+                                <option value="🌐 Social Media Automation">🌐 Social Media Automation</option>
+                                <option value="🔍 Web Scraping & Data Mining">🔍 Web Scraping & Data Mining</option>
+                                <option value="🛡️ Ad Verification & Testing">🛡️ Ad Verification & Testing</option>
+                                <option value="⚙️ API Development & Debugging">⚙️ API Development & Debugging</option>
+                                <option value="📱 Personal Mobile Proxy Utility">📱 Personal Mobile Proxy Utility</option>
+                                <option value="🔧 Other General Utility / Scraping">🔧 Other General Utility / Scraping</option>
+                            </select>
+                        </div>
+
+                        <input type="text" id="std-country-location" placeholder="Country / City (e.g. 🇮🇳 India, Mumbai)" class="bg-white border border-amber-900/20 rounded-xl px-3 py-2 text-xs mono focus:outline-none">
+                    </div>
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <input type="text" id="std-bind-ip" placeholder="Device / Tool IP (Optional: Auto-Locks on 1st use)" class="bg-white border border-amber-900/20 rounded-xl px-3 py-2 text-xs mono focus:outline-none">
+                        <input type="text" id="std-custom-key" placeholder="Custom API Key (Optional)" class="bg-white border border-amber-900/20 rounded-xl px-3 py-2 text-xs mono focus:outline-none">
+                    </div>
+
+                    <!-- Calendar Date & Time Setting -->
                     <div class="flex flex-col sm:flex-row gap-2 items-center w-full pt-1 border-t border-amber-900/10">
                         <div class="flex items-center gap-1.5 w-full sm:w-auto">
-                            <span class="text-[11px] mono text-amber-950 font-bold whitespace-nowrap">📅 Expiry:</span>
-                            <input type="datetime-local" id="new-expiry-date" class="w-full sm:w-auto bg-white border border-amber-900/20 rounded-lg px-2 py-1.5 text-xs mono focus:outline-none">
+                            <span class="text-[11px] mono text-amber-950 font-bold whitespace-nowrap">📅 Calendar Expiry:</span>
+                            <input type="datetime-local" id="std-calendar-date" class="w-full sm:w-auto bg-white border border-amber-900/20 rounded-lg px-2.5 py-1.5 text-xs mono focus:outline-none font-bold text-slate-800">
                         </div>
                         <div class="flex items-center gap-2 w-full sm:w-auto justify-between sm:justify-start">
                             <label class="flex items-center gap-1 cursor-pointer text-[11px] mono font-bold text-amber-950">
-                                <input type="checkbox" id="is-lifetime-key" onchange="toggleExpiryInput()" class="rounded border-amber-900/30"> Lifetime / Permanent
+                                <input type="checkbox" id="std-is-lifetime" onchange="toggleStdExpiry()" class="rounded border-amber-900/30"> Permanent Lifetime
                             </label>
-                            <button onclick="generateNewKey()" class="w-full sm:w-auto px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs mono rounded-lg transition-all shadow-md">Generate Key</button>
+                            <button onclick="generateStandardKey()" id="btn-generate-std" class="w-full sm:w-auto px-5 py-2 bg-amber-800 hover:bg-amber-900 text-white font-bold text-xs mono rounded-xl shadow-md transition-all">Assign to Retail Slot</button>
                         </div>
                     </div>
                 </div>
 
-                <!-- Active Keys List -->
-                <div id="active-keys-list" class="space-y-2.5 max-h-56 overflow-y-auto w-full"></div>
+                <!-- Search and Retail Slots Matrix -->
+                <div class="space-y-3">
+                    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                        <span class="text-xs mono font-extrabold text-amber-950 uppercase tracking-wider">📜 Active Utility & Retail Slots (Click Slot for Bio):</span>
+                        <input type="text" id="retail-search" oninput="filterRetailSlots()" placeholder="🔍 Search by Tool Name, Purpose or Slot #" class="bg-white/90 border border-amber-900/25 rounded-xl px-3 py-1 text-xs mono focus:outline-none w-full sm:w-64">
+                    </div>
+                    <div id="standard-keys-list" class="space-y-2 max-h-96 overflow-y-auto pr-1"></div>
+                </div>
             </div>
+
         </section>
     </div>
 
-    <!-- Comprehensive Engine Telemetry Modal with Stored Vault Data -->
+    <!-- ⚙️ SYSTEM FLEET SCALER MODAL -->
+    <div id="scaler-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-50">
+        <div class="glass-panel w-full max-w-md rounded-3xl border-2 border-blue-500/40 shadow-2xl p-6 space-y-4 text-xs mono">
+            <div class="flex justify-between items-center border-b pb-3 border-blue-500/20">
+                <span class="font-extrabold text-blue-950 text-sm flex items-center gap-1.5">
+                    <span>⚙️</span> Scale Fleet Capacity (Hyper-Scale)
+                </span>
+                <button onclick="closeSystemScalerModal()" class="w-7 h-7 rounded-lg bg-blue-100 text-blue-950 font-bold flex items-center justify-center text-sm">&times;</button>
+            </div>
+            
+            <p class="text-[11px] text-slate-600">Dynamically increase maximum allowed company slots or retail user capacity on-the-fly without server restarts.</p>
+
+            <div class="space-y-3">
+                <div class="bg-blue-50 p-3 rounded-xl border border-blue-500/20">
+                    <label class="block font-bold text-blue-950 mb-1">Max Enterprise Company Slots:</label>
+                    <input type="number" id="scale-ent-slots" min="1" max="1000" class="w-full bg-white border border-blue-500/30 rounded-lg px-3 py-2 text-xs font-bold text-blue-950">
+                </div>
+                <div class="bg-amber-50 p-3 rounded-xl border border-amber-900/20">
+                    <label class="block font-bold text-amber-950 mb-1">Max Standard / Retail User Slots:</label>
+                    <input type="number" id="scale-std-slots" min="10" max="50000" class="w-full bg-white border border-amber-900/30 rounded-lg px-3 py-2 text-xs font-bold text-amber-950">
+                </div>
+            </div>
+
+            <div class="flex gap-2 pt-2">
+                <button onclick="saveSystemCapacityScale()" id="btn-save-scale" class="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow transition-all">
+                    Apply Scaled Capacity 🚀
+                </button>
+                <button onclick="closeSystemScalerModal()" class="px-4 py-2.5 bg-slate-200 text-slate-700 font-bold rounded-xl transition-all">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================================================================== -->
+    <!-- 🏢 COMPANY DOSSIER MODAL -->
+    <!-- ==================================================================== -->
+    <div id="company-dossier-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-50">
+        <div class="glass-panel w-full max-w-xl rounded-3xl border-2 border-blue-500/40 shadow-2xl p-6 space-y-5 text-xs mono overflow-hidden">
+            <div class="flex justify-between items-start border-b border-blue-500/20 pb-3">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-black text-sm shadow-md" id="dossier-slot-badge">S1</div>
+                    <div>
+                        <h2 class="text-base font-black text-blue-950" id="dossier-company-name">Company Name</h2>
+                        <span class="text-[11px] text-slate-600 flex items-center gap-1.5 mt-0.5">
+                            <span id="dossier-country">🌐 Country</span> • <span id="dossier-status-pill">🟢 Active</span>
+                        </span>
+                    </div>
+                </div>
+                <button onclick="closeCompanyDossier()" class="w-8 h-8 rounded-xl bg-blue-100 hover:bg-blue-200 text-blue-950 font-bold flex items-center justify-center text-sm transition-all">&times;</button>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div class="bg-blue-50/80 p-3 rounded-2xl border border-blue-500/15">
+                    <span class="text-[10px] text-slate-500 uppercase font-extrabold block">Project Requests</span>
+                    <span class="text-sm font-black text-blue-700 block mt-1" id="dossier-total-requests">0</span>
+                    <span class="text-[9px] text-slate-400">Total calls handled</span>
+                </div>
+                <div class="bg-blue-50/80 p-3 rounded-2xl border border-blue-500/15">
+                    <span class="text-[10px] text-slate-500 uppercase font-extrabold block">Live Data Metered</span>
+                    <span class="text-sm font-black text-emerald-700 block mt-1" id="dossier-data-metered">0.0 MB</span>
+                    <span class="text-[9px] text-slate-400">Real-time bandwidth</span>
+                </div>
+                <div class="bg-blue-50/80 p-3 rounded-2xl border border-blue-500/15">
+                    <span class="text-[10px] text-slate-500 uppercase font-extrabold block">Capacity Fleet</span>
+                    <span class="text-sm font-black text-amber-900 block mt-1" id="dossier-capacity">10,000 req/s</span>
+                    <span class="text-[9px] text-slate-400">Throughput quota</span>
+                </div>
+            </div>
+
+            <div class="space-y-2 bg-slate-50/90 p-3.5 rounded-2xl border border-slate-200 text-slate-800">
+                <div class="flex justify-between items-center">
+                    <span class="text-slate-500">API Key:</span>
+                    <code class="bg-amber-100 px-2 py-0.5 rounded font-bold text-amber-950" id="dossier-key">--</code>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-slate-500">Server IP Binding:</span>
+                    <div class="flex items-center gap-1.5">
+                        <span class="font-bold text-blue-900" id="dossier-server-ip">Unbound</span>
+                        <button id="btn-dossier-reset-ip" onclick="resetDossierIp()" class="px-2 py-0.5 bg-blue-100 hover:bg-blue-200 text-blue-900 rounded text-[9px] font-bold">Reset IP</button>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-slate-500">Scheduled Expiry:</span>
+                    <span class="font-black text-amber-950" id="dossier-expiry-dt">--</span>
+                </div>
+            </div>
+
+            <div class="space-y-2 pt-1">
+                <div>
+                    <span class="text-[10px] text-slate-500 font-bold block mb-1">🔗 Stream Relay URL (for Downloader / IPTV):</span>
+                    <div class="flex gap-2">
+                        <input type="text" id="dossier-stream-url" readonly class="flex-1 bg-white border border-blue-500/20 rounded-xl px-3 py-1.5 text-[11px] mono select-all">
+                        <button onclick="copyKeyText(document.getElementById('dossier-stream-url').value, this)" class="px-3 py-1.5 bg-amber-800 hover:bg-amber-900 text-white font-bold rounded-xl shadow-sm">Copy</button>
+                    </div>
+                </div>
+                <div>
+                    <span class="text-[10px] text-slate-500 font-bold block mb-1">📋 Terminal Command:</span>
+                    <div class="flex gap-2">
+                        <input type="text" id="dossier-curl-cmd" readonly class="flex-1 bg-white border border-blue-500/20 rounded-xl px-3 py-1.5 text-[11px] mono select-all">
+                        <button onclick="copyKeyText(document.getElementById('dossier-curl-cmd').value, this)" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-sm">Copy</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-blue-500/20">
+                <div class="flex items-center gap-1.5">
+                    <button id="btn-dossier-cal" class="px-3 py-2 bg-blue-700 hover:bg-blue-800 text-white rounded-xl font-bold shadow-sm">📅 Modify Calendar</button>
+                    <button id="btn-dossier-lifetime" class="px-3 py-2 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-xl font-bold">👑 Make Lifetime</button>
+                </div>
+                <button id="btn-dossier-revoke" class="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold shadow-sm">🗑️ Vacate Slot</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================================================================== -->
+    <!-- 📱 RETAIL / STANDARD USER DOSSIER MODAL -->
+    <!-- ==================================================================== -->
+    <div id="standard-dossier-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-50">
+        <div class="glass-panel w-full max-w-xl rounded-3xl border-2 border-amber-900/40 shadow-2xl p-6 space-y-5 text-xs mono overflow-hidden">
+            <div class="flex justify-between items-start border-b border-amber-900/20 pb-3">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-10 h-10 rounded-2xl bg-amber-800 text-white flex items-center justify-center font-black text-sm shadow-md" id="std-dossier-slot-badge">#1</div>
+                    <div>
+                        <h2 class="text-base font-black text-amber-950" id="std-dossier-client-name">Client Name</h2>
+                        <span class="text-[11px] text-slate-600 flex items-center gap-1.5 mt-0.5">
+                            <span id="std-dossier-country">🌐 Location</span> • <span id="std-dossier-status-pill">🟢 Active</span>
+                        </span>
+                    </div>
+                </div>
+                <button onclick="closeStandardDossier()" class="w-8 h-8 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-950 font-bold flex items-center justify-center text-sm">&times;</button>
+            </div>
+
+            <div class="bg-amber-500/10 p-3 rounded-2xl border border-amber-800/20">
+                <span class="text-[10px] text-slate-500 uppercase font-extrabold block">Assigned Purpose / Activity:</span>
+                <span class="text-xs font-black text-amber-950 block mt-1" id="std-dossier-purpose">--</span>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div class="bg-white/80 p-3 rounded-2xl border border-amber-900/15">
+                    <span class="text-[10px] text-slate-500 uppercase font-extrabold block">Requests Processed</span>
+                    <span class="text-sm font-black text-amber-800 block mt-1" id="std-dossier-total-requests">0</span>
+                    <span class="text-[9px] text-slate-400">Total calls handled</span>
+                </div>
+                <div class="bg-white/80 p-3 rounded-2xl border border-amber-900/15">
+                    <span class="text-[10px] text-slate-500 uppercase font-extrabold block">Data Consumed</span>
+                    <span class="text-sm font-black text-emerald-700 block mt-1" id="std-dossier-data-metered">0.0 MB</span>
+                    <span class="text-[9px] text-slate-400">Bandwidth metered</span>
+                </div>
+                <div class="bg-white/80 p-3 rounded-2xl border border-amber-900/15">
+                    <span class="text-[10px] text-slate-500 uppercase font-extrabold block">Protection</span>
+                    <span class="text-sm font-black text-blue-900 block mt-1">15 req/sec</span>
+                    <span class="text-[9px] text-slate-400">Flood Shield active</span>
+                </div>
+            </div>
+
+            <div class="space-y-2 bg-slate-50/90 p-3.5 rounded-2xl border border-slate-200 text-slate-800">
+                <div class="flex justify-between items-center">
+                    <span class="text-slate-500">API Key:</span>
+                    <code class="bg-amber-100 px-2 py-0.5 rounded font-bold text-amber-950" id="std-dossier-key">--</code>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-slate-500">Device IP Lock:</span>
+                    <div class="flex items-center gap-1.5">
+                        <span class="font-bold text-blue-900" id="std-dossier-server-ip">Unbound</span>
+                        <button id="btn-std-dossier-reset-ip" onclick="resetStandardDossierIp()" class="px-2 py-0.5 bg-amber-200 hover:bg-amber-300 text-amber-950 rounded text-[9px] font-bold">Reset IP</button>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-slate-500">Scheduled Expiry:</span>
+                    <span class="font-black text-amber-950" id="std-dossier-expiry-dt">--</span>
+                </div>
+            </div>
+
+            <div class="space-y-2 pt-1">
+                <div>
+                    <span class="text-[10px] text-slate-500 font-bold block mb-1">🔗 Stream Relay URL:</span>
+                    <div class="flex gap-2">
+                        <input type="text" id="std-dossier-stream-url" readonly class="flex-1 bg-white border border-amber-900/20 rounded-lg px-2.5 py-1.5 text-[11px] mono select-all">
+                        <button onclick="copyKeyText(document.getElementById('std-dossier-stream-url').value, this)" class="px-3 py-1.5 bg-amber-800 hover:bg-amber-900 text-white font-bold rounded-lg shadow-sm">Copy</button>
+                    </div>
+                </div>
+                <div>
+                    <span class="text-[10px] text-slate-600 font-bold block mb-1">📋 Terminal Command:</span>
+                    <div class="flex gap-2">
+                        <input type="text" id="std-dossier-curl-cmd" readonly class="flex-1 bg-white border border-amber-900/20 rounded-lg px-2.5 py-1.5 text-[11px] mono select-all">
+                        <button onclick="copyKeyText(document.getElementById('std-dossier-curl-cmd').value, this)" class="px-3 py-1.5 bg-blue-600 text-white font-bold rounded-lg shadow-sm">Copy</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-amber-900/20">
+                <div class="flex items-center gap-1.5">
+                    <button id="btn-std-dossier-cal" class="px-3 py-2 bg-amber-800 hover:bg-amber-900 text-white rounded-xl font-bold shadow-sm">📅 Modify Calendar</button>
+                    <button id="btn-std-dossier-lifetime" class="px-3 py-2 bg-purple-100 hover:bg-purple-200 text-purple-800 rounded-xl font-bold">👑 Make Lifetime</button>
+                </div>
+                <button id="btn-std-dossier-revoke" class="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold shadow-sm">🗑️ Vacate Slot</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🗓️ TIMEZONE-IMMUNE CALENDAR & TIME PICKER MODAL -->
+    <div id="calendar-modal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-md hidden flex items-center justify-center p-4 z-50">
+        <div class="glass-panel w-full max-w-md rounded-3xl border border-amber-900/40 shadow-2xl p-6 space-y-4 text-xs mono">
+            <div class="flex justify-between items-center border-b pb-3 border-amber-900/20">
+                <span class="font-extrabold text-amber-950 text-sm flex items-center gap-1.5">
+                    <span>📅</span> Modify Calendar Date & Time
+                </span>
+                <button onclick="closeCalendarModal()" class="w-7 h-7 rounded-lg bg-amber-900/10 text-amber-950 font-bold flex items-center justify-center text-sm">&times;</button>
+            </div>
+            
+            <div class="space-y-2 text-slate-800">
+                <div>Client/Company: <b id="cal-modal-client" class="text-amber-950">--</b></div>
+                <div>Target Key: <code id="cal-modal-key" class="bg-amber-100 px-2 py-0.5 rounded text-amber-950 font-bold">--</code></div>
+            </div>
+
+            <div class="space-y-2 bg-amber-900/5 p-3 rounded-xl border border-amber-900/10">
+                <label class="block text-[11px] font-bold text-amber-950">Select New Expiry Date & Exact Time:</label>
+                <input type="datetime-local" id="cal-modal-datetime" class="w-full bg-white border border-amber-900/25 rounded-xl px-3 py-2 text-xs mono focus:outline-none font-bold text-slate-900">
+            </div>
+
+            <div class="flex gap-2 pt-2">
+                <button onclick="saveCalendarExpiry()" id="btn-save-cal" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow transition-all">
+                    Save New Expiry ✅
+                </button>
+                <button onclick="closeCalendarModal()" class="px-4 py-2.5 bg-amber-900/10 hover:bg-amber-900/20 text-amber-950 font-bold rounded-xl transition-all">
+                    Cancel
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 🌟 INSTANT KEY CREATED MODAL -->
+    <div id="key-success-modal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-md hidden flex items-center justify-center p-4 z-50">
+        <div class="glass-panel w-full max-w-lg rounded-3xl border border-emerald-600/40 shadow-2xl p-6 space-y-4 text-xs mono">
+            <div class="flex justify-between items-center border-b pb-3 border-amber-900/20">
+                <span class="font-extrabold text-emerald-800 text-sm flex items-center gap-1.5">
+                    <span>✅</span> Access Passport Activated
+                </span>
+                <button onclick="document.getElementById('key-success-modal').classList.add('hidden')" class="w-7 h-7 rounded-lg bg-amber-900/10 text-amber-950 font-bold flex items-center justify-center text-sm">&times;</button>
+            </div>
+            <div class="space-y-2 text-slate-800">
+                <div>Client/Company: <b id="succ-client" class="text-amber-950">--</b> | Tier: <span id="succ-tier" class="text-blue-700 font-bold uppercase">--</span> (Slot <span id="succ-slot">#1</span>)</div>
+                <div>Purpose: <span id="succ-purpose" class="font-bold text-amber-900">--</span></div>
+                <div>Location: <span id="succ-country" class="font-bold text-slate-700">--</span></div>
+                <div>API Key: <code id="succ-key" class="bg-amber-100 px-2 py-0.5 rounded text-amber-950 font-extrabold">--</code></div>
+            </div>
+            <div class="space-y-2 pt-2 border-t border-amber-900/10">
+                <div>
+                    <span class="text-[10px] text-slate-600 font-bold block mb-1">🔗 Stream Relay URL:</span>
+                    <div class="flex gap-2">
+                        <input type="text" id="succ-stream-url" readonly class="flex-1 bg-white border border-amber-900/20 rounded-lg px-2.5 py-1.5 text-[11px] mono select-all">
+                        <button onclick="copyKeyText(document.getElementById('succ-stream-url').value, this)" class="px-3 py-1.5 bg-amber-800 text-white font-bold rounded-lg shadow-sm">Copy</button>
+                    </div>
+                </div>
+                <div>
+                    <span class="text-[10px] text-slate-600 font-bold block mb-1">📋 Terminal Command:</span>
+                    <div class="flex gap-2">
+                        <input type="text" id="succ-curl-cmd" readonly class="flex-1 bg-white border border-amber-900/20 rounded-lg px-2.5 py-1.5 text-[11px] mono select-all">
+                        <button onclick="copyKeyText(document.getElementById('succ-curl-cmd').value, this)" class="px-3 py-1.5 bg-blue-600 text-white font-bold rounded-lg shadow-sm">Copy</button>
+                    </div>
+                </div>
+            </div>
+            <button onclick="document.getElementById('key-success-modal').classList.add('hidden')" class="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow transition-all">
+                Done & Continue
+            </button>
+        </div>
+    </div>
+
+    <!-- Telemetry Modal -->
     <div id="modal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-md hidden flex items-center justify-center p-4 z-50">
         <div class="glass-panel w-full max-w-lg rounded-3xl border border-amber-900/40 shadow-2xl flex flex-col overflow-hidden">
             <div class="flex justify-between items-center px-5 py-4 bg-amber-900/15 border-b border-amber-900/25 text-xs mono">
                 <span id="m-title" class="font-bold text-amber-950 text-base">Engine Diagnostics</span>
-                <button onclick="closeModal()" class="w-8 h-8 rounded-xl bg-amber-900/20 text-amber-950 font-bold flex items-center justify-center text-base">&times;</button>
+                <button onclick="closeModal()" class="w-8 h-8 rounded-xl bg-amber-900/20 text-amber-950 font-bold flex items-center justify-center text-base hover:bg-amber-900/30 transition-all">&times;</button>
             </div>
             <div id="modal-body" class="p-6 space-y-4 text-xs mono text-slate-900 max-h-[70vh] overflow-y-auto"></div>
         </div>
     </div>
 
     <script>
-        let storedAdminKey = "";
+        let storedAdminKey = sessionStorage.getItem('ns_admin_key') || "";
+        let wsInstance = null;
+        let wsReconnectTimer = null;
+        let activeCalendarTargetKey = "";
+        let globalEnterpriseClients = [];
+        let globalStandardClients = [];
+        let currentDossierCompany = null;
+        let currentDossierStandard = null;
+        let currentEntMaxSlots = 5;
+        let currentStdMaxSlots = 500;
         
         let liveTelemetryStore = {
             hunted_count: "--", tested_count: "--", elite_passed: "--", purged_count: "--",
             execution_time: "--", execution_speed: "--", throughput: "--", health_score: "--",
-            active_client: "--", vault_status: "--", hunter_status: "Deactivated",
+            active_client: "--", target_domain: "--", vault_status: "--", hunter_status: "Deactivated",
             inspector_status: "Deactivated", maintenance_status: "Deactivated", 
             gateway_status: "Deactivated", sources_active: "--", stream_scan: "Deactivated", 
-            http_status: "--", stored_proxies: [], vault_total_ips: "--",
-            storage_capacity: "128 GB", storage_used: "--"
+            http_status: "--", stored_proxies: [], vault_total_ips: "--"
         };
 
         let activeModalEngine = null;
 
-        /* --- AUTHENTICATION & LOCK LOGIC --- */
-        async function authenticateSystem() {
+        function formatTimestampToLocal(epochSeconds) {
+            if (!epochSeconds) return "Lifetime Permanent";
+            const date = new Date(epochSeconds * 1000);
+            return date.toLocaleString('en-US', {
+                day: '2-digit', month: 'short', year: 'numeric',
+                hour: '2-digit', minute: '2-digit', hour12: true
+            });
+        }
+
+        function getLocalIsoString(epochSeconds) {
+            const d = epochSeconds ? new Date(epochSeconds * 1000) : new Date(Date.now() + 86400000);
+            const pad = n => String(n).padStart(2, '0');
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            if (storedAdminKey) {
+                document.getElementById('master-auth-key').value = storedAdminKey;
+                authenticateSystem(true);
+            }
+        });
+
+        async function authenticateSystem(isAuto = false) {
             const inputKey = document.getElementById('master-auth-key').value.trim();
             const errorMsg = document.getElementById('auth-error-msg');
+            const unlockBtn = document.getElementById('btn-unlock');
             errorMsg.classList.add('hidden');
 
             if (!inputKey) return;
+
+            unlockBtn.disabled = true;
+            unlockBtn.innerText = "Verifying...";
 
             try {
                 const response = await fetch('/admin/keys/list', { 
                     headers: { 'X-Admin-Key': inputKey } 
                 });
 
-                if (response.ok) {
+                const contentType = response.headers.get("content-type") || "";
+                if (!contentType.includes("application/json")) {
+                    throw new Error("main.py backend is offline! (Received non-JSON response)");
+                }
+
+                const data = await response.json();
+
+                if (response.ok && data) {
                     storedAdminKey = inputKey;
+                    sessionStorage.setItem('ns_admin_key', inputKey);
                     
                     document.getElementById('system-lock-overlay').classList.add('hidden');
                     document.getElementById('main-layout').classList.remove('hidden');
                     
                     connectWebSocket();
-                    fetchActiveKeys();
+                    renderActiveKeys(data);
+                    fetchHealthStats();
                 } else {
-                    errorMsg.innerText = "❌ Access Denied: Invalid Admin Password!";
+                    sessionStorage.removeItem('ns_admin_key');
+                    errorMsg.innerText = data.detail ? `❌ ${data.detail}` : "❌ Access Denied: Invalid Admin Key!";
                     errorMsg.classList.remove('hidden');
                 }
             } catch (err) {
-                errorMsg.innerText = "❌ Server Connection Error!";
-                errorMsg.classList.remove('hidden');
+                sessionStorage.removeItem('ns_admin_key');
+                if (!isAuto) {
+                    errorMsg.innerText = `❌ ${err.message || 'Server Connection Error! Is main.py running?'}`;
+                    errorMsg.classList.remove('hidden');
+                }
+            } finally {
+                unlockBtn.disabled = false;
+                unlockBtn.innerText = "Unlock Control Room 🔓";
             }
         }
 
         function lockSystem() {
             storedAdminKey = "";
+            sessionStorage.removeItem('ns_admin_key');
             document.getElementById('master-auth-key').value = "";
             document.getElementById('system-lock-overlay').classList.remove('hidden');
             document.getElementById('main-layout').classList.add('hidden');
+            document.getElementById('master-passport-card').classList.add('hidden');
+            if (wsInstance) {
+                wsInstance.close();
+                wsInstance = null;
+            }
         }
 
-        /* --- UI & SCREEN SWITCHING --- */
         function switchScreen(screen) {
             const btnCmd = document.getElementById('btn-cmd');
             const btnVault = document.getElementById('btn-vault');
@@ -288,32 +764,50 @@
             if (screen === 'command') {
                 document.getElementById('screen-command').classList.remove('hidden');
                 document.getElementById('screen-vault').classList.add('hidden');
-                
                 btnCmd.className = "px-4 py-2 rounded-lg text-xs mono font-bold bg-blue-600 text-white shadow-md transition-all";
                 btnVault.className = "px-4 py-2 rounded-lg text-xs mono font-bold text-amber-950 hover:bg-amber-950/10 transition-all";
             } else {
                 document.getElementById('screen-command').classList.add('hidden');
                 document.getElementById('screen-vault').classList.remove('hidden');
-                
                 btnVault.className = "px-4 py-2 rounded-lg text-xs mono font-bold bg-blue-600 text-white shadow-md transition-all";
                 btnCmd.className = "px-4 py-2 rounded-lg text-xs mono font-bold text-amber-950 hover:bg-amber-950/10 transition-all";
+                fetchActiveKeys();
             }
         }
 
-        function toggleExpiryInput() {
-            const isLifetime = document.getElementById('is-lifetime-key').checked;
-            const expiryInput = document.getElementById('new-expiry-date');
-            expiryInput.disabled = isLifetime;
-            if (isLifetime) expiryInput.value = "";
+        function toggleEntExpiry() {
+            const isLifetime = document.getElementById('ent-is-lifetime').checked;
+            const input = document.getElementById('ent-calendar-date');
+            input.disabled = isLifetime;
+            if (isLifetime) input.value = "";
         }
 
-        /* --- UTILITIES & MODAL HANDLING WITH DETAILED STORED DATA --- */
+        function toggleStdExpiry() {
+            const isLifetime = document.getElementById('std-is-lifetime').checked;
+            const input = document.getElementById('std-calendar-date');
+            input.disabled = isLifetime;
+            if (isLifetime) input.value = "";
+        }
+
+        function formatTTL(typeStr) {
+            if (!typeStr || typeStr === "permanent") return `<span class="text-emerald-700 font-bold">Lifetime Permanent</span>`;
+            if (typeStr.startsWith("expires_in_")) {
+                const secs = parseInt(typeStr.replace("expires_in_", "").replace("_secs", ""), 10);
+                if (isNaN(secs)) return typeStr;
+                if (secs < 60) return `<span class="text-amber-700 font-bold">${secs}s left</span>`;
+                if (secs < 3600) return `<span class="text-amber-700 font-bold">${Math.floor(secs / 60)}m ${secs % 60}s left</span>`;
+                const hrs = Math.floor(secs / 3600);
+                const mins = Math.floor((secs % 3600) / 60);
+                return `<span class="text-amber-700 font-bold">${hrs}h ${mins}m left</span>`;
+            }
+            return `<span class="text-emerald-700 font-bold">${typeStr}</span>`;
+        }
+
         function formatSourcesText(sources) {
             if (sources === undefined || sources === null || sources === "--") return "--";
-            if (Array.isArray(sources)) return `${sources.length} Endpoints`;
-            if (typeof sources === 'number') return `${sources} Endpoints`;
-            if (typeof sources === 'string') return sources.toLowerCase().includes('endpoint') ? sources : `${sources} Endpoints`;
-            return "--";
+            if (Array.isArray(sources)) return `${sources.length} Active Feeds`;
+            if (typeof sources === 'number') return `${sources} Active Feeds`;
+            return sources.toString();
         }
 
         function getStatusBadge(statusVal) {
@@ -321,101 +815,77 @@
                 statusVal.toString().toLowerCase().includes('active') || 
                 statusVal.toString().toLowerCase().includes('running') || 
                 statusVal.toString().toLowerCase().includes('live') || 
+                statusVal.toString().toLowerCase().includes('optimized') || 
                 statusVal === true
             );
             return isAct 
-                ? { text: "Activated", class: "bg-emerald-500/20 text-emerald-800 font-bold" } 
+                ? { text: "Active", class: "bg-emerald-500/20 text-emerald-800 font-bold" } 
                 : { text: "Deactivated", class: "bg-rose-500/20 text-rose-800 font-bold" };
         }
 
         function formatHttpStatus(status) {
             if (!status || status === "--") return `<span class="text-slate-500 font-bold">--</span>`;
-            if (status.toString().includes("200")) return `<span class="text-emerald-700 font-bold">${status}</span>`;
+            const s = status.toString();
+            if (s.startsWith("2") || s.includes("200") || s.includes("206")) {
+                return `<span class="text-emerald-700 font-bold">${status}</span>`;
+            }
+            if (s.startsWith("3")) {
+                return `<span class="text-blue-700 font-bold">${status}</span>`;
+            }
             return `<span class="text-rose-700 font-bold">${status}</span>`;
         }
 
         function getEngineModalData(engineKey) {
             const data = liveTelemetryStore;
-            let storedProxiesHtml = `<div class="text-slate-500 text-center py-2">No active stored proxy records in this vault stage.</div>`;
-            
-            if (data.stored_proxies && data.stored_proxies.length > 0) {
-                storedProxiesHtml = `<div class="space-y-1.5 max-h-40 overflow-y-auto pr-1">`;
-                data.stored_proxies.forEach(p => {
-                    storedProxiesHtml += `
-                        <div class="flex justify-between items-center bg-white/90 p-2 rounded-lg border border-amber-900/10">
-                            <span class="font-bold text-slate-900">${p.ip || p.address || 'IP'}:${p.port || 'Port'}</span>
-                            <span class="text-[10px] text-emerald-700 font-bold bg-emerald-500/10 px-2 py-0.5 rounded">${p.status || 'Active'}</span>
-                        </div>`;
-                });
-                storedProxiesHtml += `</div>`;
-            }
 
             if (engineKey === 'alpha') {
                 const st = getStatusBadge(data.hunter_status);
                 return {
-                    title: "Engine 1: Proxy Hunter Telemetry & Stored Data",
+                    title: "Engine 1: Proxy Hunter Core Telemetry",
                     body: `
                         <div class="space-y-3">
-                            <div class="flex justify-between border-b pb-2"><span>Engine Status:</span> <span class="${st.class.split(' ')[1]}">${st.text}</span></div>
-                            <div class="flex justify-between border-b pb-2"><span>Raw IPs Scraped/Found:</span> <span class="font-bold text-blue-700">${data.hunted_count}</span></div>
-                            <div class="flex justify-between border-b pb-2"><span>Execution Time:</span> <span class="text-slate-900">${data.execution_time}</span></div>
-                            <div class="flex justify-between border-b pb-2"><span>Active Sources:</span> <span class="font-bold text-emerald-700">${formatSourcesText(data.sources_active)}</span></div>
-                            <div class="pt-2">
-                                <span class="font-extrabold text-amber-950 block mb-1">📦 Stored Raw IPs / Scraped Records:</span>
-                                ${storedProxiesHtml}
-                            </div>
+                            <div class="flex justify-between border-b pb-2"><span>Engine Status:</span> <span class="${st.class.split(' ')[1]} font-bold">${st.text}</span></div>
+                            <div class="flex justify-between border-b pb-2"><span>Raw IPs Scraped:</span> <span class="font-bold text-blue-700">${data.hunted_count}</span></div>
+                            <div class="flex justify-between border-b pb-2"><span>Execution Speed:</span> <span class="text-slate-900">${data.execution_time}</span></div>
+                            <div class="flex justify-between border-b pb-2"><span>Active Source Feeds:</span> <span class="font-bold text-emerald-700">${formatSourcesText(data.sources_active)}</span></div>
                         </div>`
                 };
-            }
-            else if (engineKey === 'beta') {
+            } else if (engineKey === 'beta') {
                 const st = getStatusBadge(data.inspector_status);
                 return {
-                    title: "Engine 2: Proxy Inspector Telemetry & Stored Data",
+                    title: "Engine 2: Proxy Inspector Verification",
                     body: `
                         <div class="space-y-3">
-                            <div class="flex justify-between border-b pb-2"><span>Engine Status:</span> <span class="${st.class.split(' ')[1]}">${st.text}</span></div>
-                            <div class="flex justify-between border-b pb-2"><span>IPs Tested:</span> <span class="font-bold text-slate-900">${data.tested_count}</span></div>
-                            <div class="flex justify-between border-b pb-2"><span>Elite Passed:</span> <span class="font-bold text-purple-700">${data.elite_passed}</span></div>
-                            <div class="flex justify-between border-b pb-2"><span>Execution Speed:</span> <span class="text-slate-900">${data.execution_speed}</span></div>
-                            <div class="pt-2">
-                                <span class="font-extrabold text-amber-950 block mb-1">📦 Inspected & Elite Stored Vault Records:</span>
-                                ${storedProxiesHtml}
-                            </div>
+                            <div class="flex justify-between border-b pb-2"><span>Engine Status:</span> <span class="${st.class.split(' ')[1]} font-bold">${st.text}</span></div>
+                            <div class="flex justify-between border-b pb-2"><span>IPs Inspected:</span> <span class="font-bold text-slate-900">${data.tested_count}</span></div>
+                            <div class="flex justify-between border-b pb-2"><span>Elite Passed VIPs:</span> <span class="font-bold text-purple-700">${data.elite_passed}</span></div>
+                            <div class="flex justify-between border-b pb-2"><span>Vault Pool Status:</span> <span class="text-emerald-700 font-bold">${data.vault_status}</span></div>
                         </div>`
                 };
-            }
-            else if (engineKey === 'gamma') {
+            } else if (engineKey === 'gamma') {
                 const st = getStatusBadge(data.maintenance_status);
                 const streamSt = getStatusBadge(data.stream_scan);
                 return {
-                    title: "Engine 3: Vault Doctor Telemetry & Purge Stats",
+                    title: "Engine 3: Vault Doctor Telemetry",
                     body: `
                         <div class="space-y-3">
-                            <div class="flex justify-between border-b pb-2"><span>Maintenance Status:</span> <span class="${st.class.split(' ')[1]}">${st.text}</span></div>
-                            <div class="flex justify-between border-b pb-2"><span>Health Score:</span> <span class="font-bold text-emerald-700">${data.health_score}</span></div>
-                            <div class="flex justify-between border-b pb-2"><span>Purged / Blocked Dead IPs:</span> <span class="font-bold text-rose-700">${data.purged_count}</span></div>
-                            <div class="flex justify-between border-b pb-2"><span>Stream Scan:</span> <span class="${streamSt.class.split(' ')[1]}">${streamSt.text}</span></div>
-                            <div class="pt-2">
-                                <span class="font-extrabold text-amber-950 block mb-1">📦 Cleaned Vault Storage State:</span>
-                                ${storedProxiesHtml}
-                            </div>
+                            <div class="flex justify-between border-b pb-2"><span>Maintenance Surgery:</span> <span class="${st.class.split(' ')[1]} font-bold">${st.text}</span></div>
+                            <div class="flex justify-between border-b pb-2"><span>Pool Health Score:</span> <span class="font-bold text-emerald-700">${data.health_score}</span></div>
+                            <div class="flex justify-between border-b pb-2"><span>Dead Proxies Purged:</span> <span class="font-bold text-rose-700">${data.purged_count}</span></div>
+                            <div class="flex justify-between border-b pb-2"><span>Stream Health Scan:</span> <span class="${streamSt.class.split(' ')[1]} font-bold">${streamSt.text}</span></div>
                         </div>`
                 };
-            }
-            else if (engineKey === 'delta') {
+            } else if (engineKey === 'delta') {
                 const st = getStatusBadge(data.gateway_status);
                 return {
-                    title: "Engine 4: Ultra-Gateway Telemetry & Live Intake",
+                    title: "Engine 4: Ultra-Gateway Live Relay Telemetry",
                     body: `
                         <div class="space-y-3">
-                            <div class="flex justify-between border-b pb-2"><span>Gateway Status:</span> <span class="${st.class.split(' ')[1]}">${st.text}</span></div>
+                            <div class="flex justify-between border-b pb-2"><span>Gateway Core:</span> <span class="${st.class.split(' ')[1]} font-bold">${st.text}</span></div>
                             <div class="flex justify-between border-b pb-2"><span>Active Client:</span> <span class="font-bold text-slate-900">${data.active_client}</span></div>
-                            <div class="flex justify-between border-b pb-2"><span>Live Throughput / Traffic Taken:</span> <span class="font-bold text-pink-700">${data.throughput}</span></div>
-                            <div class="flex justify-between border-b pb-2"><span>HTTP Status:</span> ${formatHttpStatus(data.http_status)}</div>
-                            <div class="pt-2">
-                                <span class="font-extrabold text-amber-950 block mb-1">📦 Gateway Active Stream Records:</span>
-                                ${storedProxiesHtml}
-                            </div>
+                            <div class="flex justify-between border-b pb-2"><span>Target Domain:</span> <span class="font-bold text-indigo-700">${data.target_domain}</span></div>
+                            <div class="flex justify-between border-b pb-2"><span>Live Latency / Speed:</span> <span class="font-bold text-pink-700">${data.throughput}</span></div>
+                            <div class="flex justify-between border-b pb-2"><span>HTTP Code:</span> ${formatHttpStatus(data.http_status)}</div>
                         </div>`
                 };
             }
@@ -442,13 +912,6 @@
                 document.getElementById('ui-vault-total-ips').innerText = data.vault_total_ips;
             } else if (data.elite_passed !== undefined) {
                 document.getElementById('ui-vault-total-ips').innerText = data.elite_passed;
-            }
-
-            if (data.storage_capacity !== undefined) {
-                document.getElementById('ui-storage-capacity').innerText = data.storage_capacity;
-            }
-            if (data.storage_used !== undefined) {
-                document.getElementById('ui-storage-used').innerText = data.storage_used;
             }
 
             if (data.hunted_count !== undefined) document.getElementById('ui-eng1-ips').innerText = data.hunted_count;
@@ -483,6 +946,7 @@
             }
 
             if (data.active_client !== undefined) document.getElementById('ui-eng4-client').innerText = data.active_client;
+            if (data.target_domain !== undefined) document.getElementById('ui-eng4-domain').innerText = data.target_domain;
             if (data.throughput !== undefined) document.getElementById('ui-eng4-throughput').innerText = data.throughput;
             if (data.http_status !== undefined) document.getElementById('ui-eng4-http').innerHTML = formatHttpStatus(data.http_status);
             if (data.gateway_status !== undefined) {
@@ -496,173 +960,825 @@
             }
         }
 
-        /* --- VAULT API & PERMANENT FIXED COPY LOGIC --- */
-        async function fetchActiveKeys() {
-            if (!storedAdminKey) return;
-            const listContainer = document.getElementById('active-keys-list');
+        async function fetchHealthStats() {
             try {
-                const response = await fetch('/admin/keys/list', { headers: { 'X-Admin-Key': storedAdminKey } });
-                if (response.ok) {
-                    const data = await response.json();
-                    
-                    if (data.total_active !== undefined) {
-                        document.getElementById('ui-vault-total-ips').innerText = data.total_active;
+                const res = await fetch('/health');
+                if (res.ok) {
+                    const health = await res.json();
+                    if (health.vip_pool_ips !== undefined) {
+                        document.getElementById('ui-vault-total-ips').innerText = health.vip_pool_ips;
                     }
-
-                    if (!data.active_clients || data.active_clients.length === 0) {
-                        listContainer.innerHTML = `<div class="text-center p-3 text-xs text-slate-500 mono">No active client keys found.</div>`;
-                        return;
+                    if (health.enterprise_fleet_slots !== undefined) {
+                        document.getElementById('ui-enterprise-slots').innerText = health.enterprise_fleet_slots;
                     }
-
-                    let html = "";
-                    data.active_clients.forEach(c => {
-                        const realKey = c.key_id || "";
-                        // सीधा तैयार curl कमांड बनाएँ ताकि एक क्लिक में सर्वर टेस्ट हो सके
-                        const curlCommand = `curl -H "X-API-Key: ${realKey}" http://${window.location.host}/proxy/connect`;
-
-                        html += `
-                            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white/95 p-3 rounded-xl border border-amber-900/15 text-xs mono gap-2">
-                                <div class="overflow-hidden">
-                                    <span class="font-bold text-amber-950">${c.client_name}</span>
-                                    <span class="text-[10px] text-slate-500 block">Key: <code class="bg-amber-100 px-1 rounded">${c.key_prefix || 'VIP'}</code> | Type: ${c.type || 'Permanent'}</span>
-                                </div>
-                                <div class="flex gap-2 w-full sm:w-auto justify-end">
-                                    <button onclick="copyKeyText('${curlCommand}', this)" class="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] rounded-lg transition-all shadow-sm">📋 Copy Curl</button>
-                                    <button onclick="revokeKey('${c.key_id}', '${c.client_name}')" class="px-2.5 py-1 bg-rose-500/10 hover:bg-rose-600 hover:text-white text-rose-700 font-bold text-[10px] rounded-lg border border-rose-500/20 transition-all">Revoke</button>
-                                </div>
-                            </div>`;
-                    });
-                    listContainer.innerHTML = html;
+                    if (health.standard_retail_slots !== undefined) {
+                        document.getElementById('ui-standard-slots').innerText = health.standard_retail_slots;
+                    }
                 }
-            } catch (err) { 
-                listContainer.innerHTML = `<div class="text-center p-3 text-xs text-rose-600 mono">Failed to load active keys.</div>`; 
+            } catch (e) {}
+        }
+        setInterval(fetchHealthStats, 8000);
+
+        async function executeProxyProbe() {
+            const targetUrl = document.getElementById('probe-target-url').value.trim();
+            const selectedKey = document.getElementById('probe-selected-key').value.trim();
+            const resultBox = document.getElementById('probe-result-box');
+            const probeBtn = document.getElementById('btn-probe');
+            const probeStatus = document.getElementById('probe-status');
+
+            if (!targetUrl) return alert("Please enter a target URL to test.");
+            if (!selectedKey) return alert("Please select an active API Key.");
+
+            probeBtn.disabled = true;
+            probeBtn.innerText = "Probing...";
+            probeStatus.innerText = "Sending through Engine 4...";
+            resultBox.classList.remove('hidden');
+            resultBox.innerHTML = `<span>Connecting via Key [${selectedKey}]...</span>`;
+
+            const t0 = performance.now();
+            try {
+                const testProxyUrl = `${window.location.origin}/gateway/proxy?key=${encodeURIComponent(selectedKey)}&target_url=${encodeURIComponent(targetUrl)}`;
+                const response = await fetch(testProxyUrl);
+                const t1 = performance.now();
+                const latency = Math.round(t1 - t0);
+
+                const responseText = await response.text();
+                probeStatus.innerText = `Done in ${latency}ms | Status: ${response.status}`;
+
+                let parsedText = responseText;
+                try {
+                    parsedText = JSON.stringify(JSON.parse(responseText), null, 2);
+                } catch (e) {}
+
+                resultBox.innerHTML = `
+                    <div class="text-amber-400 font-bold mb-1">HTTP ${response.status} (${response.statusText}) - Latency: ${latency}ms - Key: ${selectedKey}</div>
+                    <pre class="whitespace-pre-wrap">${parsedText.slice(0, 500)}${parsedText.length > 500 ? '...' : ''}</pre>
+                `;
+            } catch (err) {
+                probeStatus.innerText = "Probe Failed";
+                resultBox.innerHTML = `<span class="text-rose-400 font-bold">Error: ${err.message}</span>`;
+            } finally {
+                probeBtn.disabled = false;
+                probeBtn.innerText = "Run Test 🚀";
             }
         }
 
-        /* --- UNIVERSAL HTTP/HTTPS CLIPBOARD COPY FALLBACK --- */
-        function copyKeyText(text, btnElement) {
-            if (!text) {
-                alert("Key string not available.");
+        /* --- ⚙️ SYSTEM FLEET SCALER MODAL CONTROLS --- */
+        function openSystemScalerModal() {
+            document.getElementById('scale-ent-slots').value = currentEntMaxSlots;
+            document.getElementById('scale-std-slots').value = currentStdMaxSlots;
+            document.getElementById('scaler-modal').classList.remove('hidden');
+        }
+
+        function closeSystemScalerModal() {
+            document.getElementById('scaler-modal').classList.add('hidden');
+        }
+
+        async function saveSystemCapacityScale() {
+            const entSlots = parseInt(document.getElementById('scale-ent-slots').value, 10);
+            const stdSlots = parseInt(document.getElementById('scale-std-slots').value, 10);
+
+            if (!entSlots || entSlots < 1) return alert("Enterprise slots must be at least 1.");
+            if (!stdSlots || stdSlots < 10) return alert("Retail slots must be at least 10.");
+
+            const btn = document.getElementById('btn-save-scale');
+            btn.disabled = true;
+            btn.innerText = "Scaling Fleet...";
+
+            try {
+                const response = await fetch('/admin/system/config', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Admin-Key': storedAdminKey
+                    },
+                    body: JSON.stringify({
+                        enterprise_max_slots: entSlots,
+                        standard_max_slots: stdSlots
+                    })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    closeSystemScalerModal();
+                    fetchActiveKeys();
+                    fetchHealthStats();
+                    alert("✅ System Fleet capacity dynamically scaled without downtime!");
+                } else {
+                    alert(`❌ Failed: ${data.detail || 'Server error'}`);
+                }
+            } catch (err) {
+                alert("Error connecting to server.");
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "Apply Scaled Capacity 🚀";
+            }
+        }
+
+        /* --- 🏢 DEEP COMPANY DOSSIER MODAL --- */
+        function openCompanyDossier(slotIndex) {
+            const c = globalEnterpriseClients[slotIndex];
+            if (!c) return;
+            currentDossierCompany = c;
+
+            document.getElementById('dossier-slot-badge').innerText = `S${c.slot_number}`;
+            document.getElementById('dossier-company-name').innerText = c.client_name;
+            document.getElementById('dossier-country').innerText = c.country || "🌐 Global / Unspecified";
+            
+            const statusPill = document.getElementById('dossier-status-pill');
+            if (c.is_active) {
+                statusPill.innerText = "🟢 Active Company";
+                statusPill.className = "text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded";
+            } else {
+                statusPill.innerText = "🔴 Deactivated / Expired";
+                statusPill.className = "text-rose-700 font-bold bg-rose-100 px-2 py-0.5 rounded";
+            }
+
+            document.getElementById('dossier-total-requests').innerText = c.total_requests_display || "0";
+            document.getElementById('dossier-data-metered').innerText = c.data_usage || "0.0 MB";
+            document.getElementById('dossier-capacity').innerText = c.allocated_rps || "10,000 req/s";
+            document.getElementById('dossier-key').innerText = c.full_key;
+            document.getElementById('dossier-server-ip').innerText = c.bound_ip || "Unbound (Auto-Bind on 1st use)";
+            document.getElementById('dossier-expiry-dt').innerText = formatTimestampToLocal(c.target_timestamp);
+
+            document.getElementById('dossier-stream-url').value = c.stream_url;
+            document.getElementById('dossier-curl-cmd').value = c.curl_cmd;
+
+            document.getElementById('btn-dossier-cal').onclick = () => {
+                openCalendarModal(c.full_key, c.client_name, c.target_timestamp);
+            };
+            document.getElementById('btn-dossier-lifetime').onclick = () => {
+                adjustKeyTTL(c.full_key, 'set_lifetime');
+                closeCompanyDossier();
+            };
+            document.getElementById('btn-dossier-revoke').onclick = () => {
+                revokeKey(c.full_key, c.client_name);
+                closeCompanyDossier();
+            };
+
+            const resetIpBtn = document.getElementById('btn-dossier-reset-ip');
+            if (c.bound_ip && c.bound_ip !== "Unbound (Auto-Bind on 1st use)" && c.bound_ip !== "Unbound (Auto-Bind to Server)") {
+                resetIpBtn.classList.remove('hidden');
+            } else {
+                resetIpBtn.classList.add('hidden');
+            }
+
+            document.getElementById('company-dossier-modal').classList.remove('hidden');
+        }
+
+        function closeCompanyDossier() {
+            currentDossierCompany = null;
+            document.getElementById('company-dossier-modal').classList.add('hidden');
+        }
+
+        function resetDossierIp() {
+            if (!currentDossierCompany) return;
+            resetKeyIp(currentDossierCompany.full_key);
+            closeCompanyDossier();
+        }
+
+        /* --- 📱 DEEP STANDARD / RETAIL USER DOSSIER MODAL --- */
+        function openStandardDossier(slotIndex) {
+            const c = globalStandardClients[slotIndex];
+            if (!c) return;
+            currentDossierStandard = c;
+
+            document.getElementById('std-dossier-slot-badge').innerText = `#${c.slot_number}`;
+            document.getElementById('std-dossier-client-name').innerText = c.client_name;
+            document.getElementById('std-dossier-country').innerText = c.country || "🌐 General Location";
+            document.getElementById('std-dossier-purpose').innerText = c.purpose || "IMO / Social / Browsing";
+
+            const statusPill = document.getElementById('std-dossier-status-pill');
+            if (c.is_active) {
+                statusPill.innerText = "🟢 Active Slot";
+                statusPill.className = "text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded";
+            } else {
+                statusPill.innerText = "🔴 Expired / Deactivated";
+                statusPill.className = "text-rose-700 font-bold bg-rose-100 px-2 py-0.5 rounded";
+            }
+
+            document.getElementById('std-dossier-total-requests').innerText = c.total_requests_display || "0";
+            document.getElementById('std-dossier-data-metered').innerText = c.data_usage || "0.0 MB";
+            document.getElementById('std-dossier-key').innerText = c.full_key;
+            document.getElementById('std-dossier-server-ip').innerText = c.bound_ip || "Unbound (Auto-Bind on 1st use)";
+            document.getElementById('std-dossier-expiry-dt').innerText = formatTimestampToLocal(c.target_timestamp);
+
+            document.getElementById('std-dossier-stream-url').value = c.stream_url;
+            document.getElementById('std-dossier-curl-cmd').value = c.curl_cmd;
+
+            document.getElementById('btn-std-dossier-cal').onclick = () => {
+                openCalendarModal(c.full_key, c.client_name, c.target_timestamp);
+            };
+            document.getElementById('btn-std-dossier-lifetime').onclick = () => {
+                adjustKeyTTL(c.full_key, 'set_lifetime');
+                closeStandardDossier();
+            };
+            document.getElementById('btn-std-dossier-revoke').onclick = () => {
+                revokeKey(c.full_key, c.client_name);
+                closeStandardDossier();
+            };
+
+            const resetIpBtn = document.getElementById('btn-std-dossier-reset-ip');
+            if (c.bound_ip && c.bound_ip !== "Unbound (Auto-Bind on 1st use)") {
+                resetIpBtn.classList.remove('hidden');
+            } else {
+                resetIpBtn.classList.add('hidden');
+            }
+
+            document.getElementById('standard-dossier-modal').classList.remove('hidden');
+        }
+
+        function closeStandardDossier() {
+            currentDossierStandard = null;
+            document.getElementById('standard-dossier-modal').classList.add('hidden');
+        }
+
+        function resetStandardDossierIp() {
+            if (!currentDossierStandard) return;
+            resetKeyIp(currentDossierStandard.full_key);
+            closeStandardDossier();
+        }
+
+        /* --- 📅 TIMEZONE-IMMUNE CALENDAR & TIME LOGIC --- */
+        function openCalendarModal(keyId, clientName, targetTimestamp) {
+            activeCalendarTargetKey = keyId;
+            document.getElementById('cal-modal-client').innerText = clientName;
+            document.getElementById('cal-modal-key').innerText = keyId;
+            
+            const dtInput = document.getElementById('cal-modal-datetime');
+            dtInput.value = getLocalIsoString(targetTimestamp);
+            
+            document.getElementById('calendar-modal').classList.remove('hidden');
+        }
+
+        function closeCalendarModal() {
+            activeCalendarTargetKey = "";
+            document.getElementById('calendar-modal').classList.add('hidden');
+        }
+
+        async function saveCalendarExpiry() {
+            const dtVal = document.getElementById('cal-modal-datetime').value;
+            if (!dtVal) return alert("Please select both Date and Time from the calendar.");
+
+            const targetMs = new Date(dtVal).getTime();
+            const nowMs = Date.now();
+            const diffSec = Math.floor((targetMs - nowMs) / 1000);
+
+            if (diffSec <= 0) return alert("Selected Calendar Date and Time must be in the future!");
+
+            const saveBtn = document.getElementById('btn-save-cal');
+            saveBtn.disabled = true;
+            saveBtn.innerText = "Saving...";
+
+            try {
+                const response = await fetch('/admin/keys/adjust_expiry', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json', 
+                        'X-Admin-Key': storedAdminKey 
+                    },
+                    body: JSON.stringify({ 
+                        target_key: activeCalendarTargetKey, 
+                        action: "set_datetime", 
+                        seconds: diffSec,
+                        target_datetime: dtVal 
+                    })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    closeCalendarModal();
+                    fetchActiveKeys();
+                    alert(`✅ Expiry successfully set to: ${dtVal}`);
+                } else {
+                    alert(`❌ Failed: ${data.detail || 'Rejection from server'}`);
+                }
+            } catch (err) {
+                alert("Error connecting to server.");
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.innerText = "Save New Expiry ✅";
+            }
+        }
+
+        function renderActiveKeys(data) {
+            const entContainer = document.getElementById('enterprise-keys-list');
+            const probeKeySelect = document.getElementById('probe-selected-key');
+            
+            const entSlotsUsed = data.enterprise_slots_used || 0;
+            currentEntMaxSlots = data.enterprise_slots_total || 5;
+            const stdSlotsUsed = data.standard_slots_used || 0;
+            currentStdMaxSlots = data.standard_slots_total || 500;
+
+            document.getElementById('ui-enterprise-slots').innerText = `${entSlotsUsed}/${currentEntMaxSlots}`;
+            document.getElementById('ui-standard-slots').innerText = `${stdSlotsUsed}/${currentStdMaxSlots}`;
+            document.getElementById('enterprise-badge-count').innerText = `${entSlotsUsed} / ${currentEntMaxSlots} Slots Used`;
+            document.getElementById('standard-badge-count').innerText = `${stdSlotsUsed} / ${currentStdMaxSlots} Slots Used`;
+
+            const masterCard = document.getElementById('master-passport-card');
+            if (data.master_client && data.master_client.full_key) {
+                masterCard.classList.remove('hidden');
+                masterCard.classList.add('flex');
+                document.getElementById('master-passport-key-display').innerText = data.master_client.full_key;
+                if (data.master_client.data_usage) {
+                    document.getElementById('master-passport-data').innerText = data.master_client.data_usage;
+                }
+                document.getElementById('btn-copy-master-url').onclick = function() {
+                    copyKeyText(data.master_client.stream_url, this);
+                };
+                document.getElementById('btn-copy-master-curl').onclick = function() {
+                    copyKeyText(data.master_client.curl_cmd, this);
+                };
+            } else {
+                masterCard.classList.add('hidden');
+                masterCard.classList.remove('flex');
+            }
+
+            globalEnterpriseClients = data.enterprise_clients || [];
+            globalStandardClients = data.standard_clients || [];
+
+            let selectOptions = `<option value="">Select active key</option>`;
+            if (data.master_client) {
+                selectOptions += `<option value="${data.master_client.full_key}">🔑 Master Passport (${data.master_client.client_name})</option>`;
+            }
+            [...globalEnterpriseClients, ...globalStandardClients].forEach(k => {
+                const realKey = k.full_key || k.key_id || "";
+                selectOptions += `<option value="${realKey}">🔑 Slot #${k.slot_number}: ${k.client_name} (${k.tier})</option>`;
+            });
+            probeKeySelect.innerHTML = selectOptions;
+
+            // 1. Render Clean Enterprise Slots Matrix
+            let entHtml = "";
+            for (let slotNum = 1; slotNum <= currentEntMaxSlots; slotNum++) {
+                const c = globalEnterpriseClients.find(item => item.slot_number === slotNum);
+                if (c) {
+                    const countryBadge = c.country || "🌐 Global";
+                    const isLive = c.is_active;
+
+                    entHtml += `
+                        <div class="slot-banner bg-white/95 border-2 border-blue-500/40 p-3.5 rounded-2xl text-xs mono flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 cursor-pointer shadow-sm hover:border-blue-600" onclick="openCompanyDossier(${globalEnterpriseClients.indexOf(c)})">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-xl bg-blue-600 text-white font-black flex items-center justify-center text-xs shadow-sm">
+                                    S${slotNum}
+                                </div>
+                                <div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-black text-blue-950 text-sm">${c.client_name}</span>
+                                        <span class="text-[10px] bg-blue-100 text-blue-900 px-1.5 py-0.5 rounded font-bold">${countryBadge}</span>
+                                        <span class="text-[10px] ${isLive ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'} px-1.5 py-0.5 rounded font-black">
+                                            ${isLive ? '● ACTIVE' : '○ DEACTIVATED'}
+                                        </span>
+                                    </div>
+                                    <div class="flex items-center gap-3 mt-1 text-[11px] text-slate-600">
+                                        <span>Requests: <b class="text-blue-700">${c.total_requests_display || '0'}</b></span>
+                                        <span>•</span>
+                                        <span>Data: <b class="text-emerald-700">${c.data_usage || '0.0 MB'}</b></span>
+                                        <span>•</span>
+                                        <span>Capacity: <b class="text-slate-800">${c.allocated_rps}</b></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2 w-full sm:w-auto justify-end">
+                                <button class="px-3 py-1.5 bg-blue-50 hover:bg-blue-600 hover:text-white text-blue-700 font-bold rounded-xl border border-blue-500/30 text-[11px] transition-all flex items-center gap-1">
+                                    <span>Company Dossier</span> <span>↗</span>
+                                </button>
+                            </div>
+                        </div>`;
+                } else {
+                    entHtml += `
+                        <div class="border-2 border-dashed border-blue-400/40 p-3.5 rounded-2xl text-xs mono flex justify-between items-center bg-blue-50/30">
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-xl bg-slate-200 text-slate-600 font-bold flex items-center justify-center text-xs">
+                                    S${slotNum}
+                                </div>
+                                <span class="text-slate-500 italic">Empty Slot ${slotNum} (Ready for Major Software Company)</span>
+                            </div>
+                            <span class="text-[10px] font-bold text-blue-600 bg-blue-100 px-2 py-1 rounded-lg">AVAILABLE</span>
+                        </div>`;
+                }
+            }
+            entContainer.innerHTML = entHtml;
+
+            // 2. Render Retail Slots
+            renderRetailSlotsList(globalStandardClients);
+        }
+
+        function renderRetailSlotsList(list) {
+            const stdContainer = document.getElementById('standard-keys-list');
+            if (!list || list.length === 0) {
+                stdContainer.innerHTML = `<div class="text-center p-3 text-xs text-slate-500 mono bg-white/60 rounded-xl">No retail slots active. All configured slots are available.</div>`;
                 return;
             }
 
-            if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(text).then(() => {
-                    triggerCopySuccess(btnElement);
-                }).catch(() => {
-                    executeUniversalFallback(text, btnElement);
+            let html = "";
+            list.forEach(c => {
+                const idx = globalStandardClients.indexOf(c);
+                const isLive = c.is_active;
+
+                html += `
+                    <div class="slot-banner bg-white/95 border border-amber-900/20 p-3 rounded-2xl text-xs mono flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 cursor-pointer shadow-sm hover:border-amber-800" onclick="openStandardDossier(${idx})">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-7 h-7 rounded-lg bg-amber-800 text-white font-bold flex items-center justify-center text-[11px] shadow-sm">
+                                #${c.slot_number}
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <span class="font-extrabold text-amber-950">${c.client_name}</span>
+                                    <span class="text-[10px] bg-amber-100 text-amber-900 px-1.5 py-0.2 rounded font-bold">${c.purpose}</span>
+                                    <span class="text-[9px] ${isLive ? 'text-emerald-700' : 'text-rose-700'} font-black">
+                                        ${isLive ? '● Active' : '○ Expired'}
+                                    </span>
+                                </div>
+                                <div class="text-[10px] text-slate-500 mt-0.5">
+                                    Location: <b>${c.country}</b> • Calls: <b>${c.total_requests_display}</b> • Data: <b>${c.data_usage}</b>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-1.5 w-full sm:w-auto justify-end">
+                            <span class="text-[10px] text-slate-500">${formatTimestampToLocal(c.target_timestamp)}</span>
+                            <button class="px-2 py-1 bg-amber-50 hover:bg-amber-800 hover:text-white text-amber-900 font-bold rounded-lg border border-amber-900/20 text-[10px] transition-all">
+                                Bio ↗
+                            </button>
+                        </div>
+                    </div>`;
+            });
+            stdContainer.innerHTML = html;
+        }
+
+        function filterRetailSlots() {
+            const query = document.getElementById('retail-search').value.toLowerCase().trim();
+            if (!query) {
+                renderRetailSlotsList(globalStandardClients);
+                return;
+            }
+            const filtered = globalStandardClients.filter(c => 
+                c.client_name.toLowerCase().includes(query) ||
+                (c.purpose && c.purpose.toLowerCase().includes(query)) ||
+                (c.country && c.country.toLowerCase().includes(query)) ||
+                String(c.slot_number).includes(query)
+            );
+            renderRetailSlotsList(filtered);
+        }
+
+        async function fetchActiveKeys() {
+            if (!storedAdminKey) return;
+            try {
+                const response = await fetch('/admin/keys/list', { 
+                    headers: { 'X-Admin-Key': storedAdminKey } 
                 });
-            } else {
-                executeUniversalFallback(text, btnElement);
-            }
-        }
-
-        function executeUniversalFallback(text, btnElement) {
-            const textArea = document.createElement("textarea");
-            textArea.value = text;
-            textArea.style.position = "fixed";
-            textArea.style.top = "0";
-            textArea.style.left = "0";
-            textArea.style.opacity = "0";
-            
-            document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
-
-            try {
-                const successful = document.execCommand('copy');
-                if (successful) {
-                    triggerCopySuccess(btnElement);
-                } else {
-                    alert("Clipboard copy failed.");
+                
+                const contentType = response.headers.get("content-type") || "";
+                if (!contentType.includes("application/json")) {
+                    throw new Error("Invalid response from server");
                 }
-            } catch (err) {
-                alert("Error copying to clipboard.");
+
+                if (response.ok) {
+                    const data = await response.json();
+                    renderActiveKeys(data);
+                }
+            } catch (err) {}
+        }
+
+        function copyKeyText(text, btnElement) {
+            if (!text) return;
+            const copyAction = () => {
+                const originalHtml = btnElement.innerHTML;
+                btnElement.innerText = "✅ Copied!";
+                btnElement.classList.add("bg-emerald-600", "text-white");
+                setTimeout(() => {
+                    btnElement.innerHTML = originalHtml;
+                    btnElement.classList.remove("bg-emerald-600");
+                }, 1600);
+            };
+
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(copyAction).catch(() => fallbackCopy(text, copyAction));
+            } else {
+                fallbackCopy(text, copyAction);
+            }
+        }
+
+        function fallbackCopy(text, onSuccess) {
+            const ta = document.createElement("textarea");
+            ta.value = text;
+            ta.style.position = "fixed";
+            ta.style.left = "-9999px";
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            try {
+                if (document.execCommand('copy')) onSuccess();
+                else prompt("Copy link:", text);
+            } catch (e) {
+                prompt("Copy link:", text);
+            }
+            document.body.removeChild(ta);
+        }
+
+        /* --- 🏢 GENERATE ENTERPRISE KEY --- */
+        async function generateEnterpriseKey() {
+            const clientName = document.getElementById('ent-company-name').value.trim();
+            const countryLocation = document.getElementById('ent-country-location').value.trim();
+            const customKey = document.getElementById('ent-custom-key').value.trim();
+            const bindIp = document.getElementById('ent-server-ip').value.trim();
+            const allocatedRps = parseInt(document.getElementById('ent-allocated-rps').value, 10);
+            const isLifetime = document.getElementById('ent-is-lifetime').checked;
+            const expiryDate = document.getElementById('ent-calendar-date').value;
+            const genBtn = document.getElementById('btn-generate-ent');
+
+            if (!clientName) return alert("Please enter Company Name.");
+
+            if (!isLifetime && !expiryDate) {
+                return alert("Please select an Expiry Date & Time from the calendar, or check 'Permanent Lifetime'.");
             }
 
-            document.body.removeChild(textArea);
-        }
+            if (customKey && !/^[A-Za-z0-9_\-\.\(\)]+$/.test(customKey)) {
+                return alert("Custom Key contains illegal characters! Only alphanumeric, '_', '-', '.', and '()' are allowed.");
+            }
 
-        function triggerCopySuccess(btnElement) {
-            const originalText = btnElement.innerText;
-            btnElement.innerText = "✅ Copied Curl!";
-            btnElement.classList.remove("bg-blue-600", "hover:bg-blue-700");
-            btnElement.classList.add("bg-emerald-600", "text-white");
-            setTimeout(() => {
-                btnElement.innerText = originalText;
-                btnElement.classList.remove("bg-emerald-600", "text-white");
-                btnElement.classList.add("bg-blue-600", "hover:bg-blue-700");
-            }, 2000);
-        }
-
-        async function generateNewKey() {
-            const clientName = document.getElementById('new-client-name').value.trim();
-            const customKey = document.getElementById('new-custom-key').value.trim();
-            const isLifetime = document.getElementById('is-lifetime-key').checked;
-            const expiryDate = document.getElementById('new-expiry-date').value;
-
-            if (!clientName) return alert("Please enter a Client Name.");
+            genBtn.disabled = true;
+            genBtn.innerText = "Assigning Slot...";
 
             try {
-                const payload = { client_name: clientName };
+                const payload = { 
+                    client_name: clientName,
+                    tier: "enterprise",
+                    country: countryLocation || "🌐 Global / Unspecified",
+                    purpose: "Enterprise Media Streaming & Downloads",
+                    allocated_rps: allocatedRps
+                };
                 if (customKey) payload.custom_api_key = customKey;
-                if (isLifetime) {
-                    payload.duration_type = "lifetime";
-                } else if (expiryDate) {
-                    payload.expiry = expiryDate;
+                if (bindIp) payload.bind_ip = bindIp;
+
+                if (!isLifetime && expiryDate) {
+                    const diffSec = Math.floor((new Date(expiryDate).getTime() - Date.now()) / 1000);
+                    if (diffSec <= 0) {
+                        genBtn.disabled = false;
+                        genBtn.innerText = "Assign to Company Slot";
+                        return alert("Calendar Expiry must be in the future!");
+                    }
+                    payload.expiry_seconds = diffSec;
+                } else {
+                    payload.expiry_seconds = null;
                 }
 
                 const response = await fetch('/admin/keys/generate', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Admin-Key': storedAdminKey },
+                    headers: { 
+                        'Content-Type': 'application/json', 
+                        'X-Admin-Key': storedAdminKey 
+                    },
                     body: JSON.stringify(payload)
                 });
+
+                const data = await response.json();
+
                 if (response.ok) {
-                    document.getElementById('new-client-name').value = "";
-                    document.getElementById('new-custom-key').value = "";
-                    document.getElementById('new-expiry-date').value = "";
-                    document.getElementById('is-lifetime-key').checked = false;
-                    toggleExpiryInput();
+                    document.getElementById('ent-company-name').value = "";
+                    document.getElementById('ent-country-location').value = "";
+                    document.getElementById('ent-custom-key').value = "";
+                    document.getElementById('ent-server-ip').value = "";
+                    document.getElementById('ent-calendar-date').value = "";
+                    document.getElementById('ent-is-lifetime').checked = false;
+                    toggleEntExpiry();
+                    
                     fetchActiveKeys();
-                } else { alert("Failed to generate key."); }
-            } catch (err) { alert("Error connecting to server."); }
+                    fetchHealthStats();
+
+                    document.getElementById('succ-client').innerText = data.client_name;
+                    document.getElementById('succ-tier').innerText = "ENTERPRISE B2B";
+                    document.getElementById('succ-slot').innerText = `#${data.slot_number}`;
+                    document.getElementById('succ-purpose').innerText = data.purpose;
+                    document.getElementById('succ-country').innerText = data.country;
+                    document.getElementById('succ-key').innerText = data.api_key;
+                    document.getElementById('succ-stream-url').value = data.stream_url;
+                    document.getElementById('succ-curl-cmd').value = data.curl_cmd;
+                    document.getElementById('key-success-modal').classList.remove('hidden');
+
+                } else {
+                    alert(`❌ Failed: ${data.detail || 'Rejection from backend'}`);
+                }
+            } catch (err) { 
+                alert("Error connecting to server. Is main.py running?"); 
+            } finally {
+                genBtn.disabled = false;
+                genBtn.innerText = "Assign to Company Slot";
+            }
         }
 
-        async function revokeKey(targetId, clientName) {
-            if (!confirm(`Are you sure you want to revoke API Key for ${clientName}?`)) return;
+        /* --- 📱 GENERATE STANDARD KEY --- */
+        async function generateStandardKey() {
+            const clientName = document.getElementById('std-client-name').value.trim();
+            const purpose = document.getElementById('std-purpose').value;
+            const countryLocation = document.getElementById('std-country-location').value.trim();
+            const customKey = document.getElementById('std-custom-key').value.trim();
+            const bindIp = document.getElementById('std-bind-ip').value.trim();
+            const isLifetime = document.getElementById('std-is-lifetime').checked;
+            const expiryDate = document.getElementById('std-calendar-date').value;
+            const genBtn = document.getElementById('btn-generate-std');
+
+            if (!clientName) return alert("Please enter User / Client Name.");
+
+            if (!isLifetime && !expiryDate) {
+                return alert("Please select an Expiry Date & Time from the calendar, or check 'Permanent Lifetime'.");
+            }
+
+            if (customKey && !/^[A-Za-z0-9_\-\.\(\)]+$/.test(customKey)) {
+                return alert("Custom Key contains illegal characters! Only alphanumeric, '_', '-', '.', and '()' are allowed.");
+            }
+
+            genBtn.disabled = true;
+            genBtn.innerText = "Allocating Slot...";
+
+            try {
+                const payload = { 
+                    client_name: clientName,
+                    tier: "standard",
+                    purpose: purpose,
+                    country: countryLocation || "🌐 General Location",
+                    allocated_rps: 15
+                };
+                if (customKey) payload.custom_api_key = customKey;
+                if (bindIp) payload.bind_ip = bindIp;
+
+                if (!isLifetime && expiryDate) {
+                    const diffSec = Math.floor((new Date(expiryDate).getTime() - Date.now()) / 1000);
+                    if (diffSec <= 0) {
+                        genBtn.disabled = false;
+                        genBtn.innerText = "Assign to Retail Slot";
+                        return alert("Calendar Expiry must be in the future!");
+                    }
+                    payload.expiry_seconds = diffSec;
+                } else {
+                    payload.expiry_seconds = null;
+                }
+
+                const response = await fetch('/admin/keys/generate', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json', 
+                        'X-Admin-Key': storedAdminKey 
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('std-client-name').value = "";
+                    document.getElementById('std-country-location').value = "";
+                    document.getElementById('std-custom-key').value = "";
+                    document.getElementById('std-bind-ip').value = "";
+                    document.getElementById('std-calendar-date').value = "";
+                    document.getElementById('std-is-lifetime').checked = false;
+                    toggleStdExpiry();
+                    
+                    fetchActiveKeys();
+                    fetchHealthStats();
+
+                    document.getElementById('succ-client').innerText = data.client_name;
+                    document.getElementById('succ-tier').innerText = "RETAIL FLEET";
+                    document.getElementById('succ-slot').innerText = `#${data.slot_number}`;
+                    document.getElementById('succ-purpose').innerText = data.purpose;
+                    document.getElementById('succ-country').innerText = data.country;
+                    document.getElementById('succ-key').innerText = data.api_key;
+                    document.getElementById('succ-stream-url').value = data.stream_url;
+                    document.getElementById('succ-curl-cmd').value = data.curl_cmd;
+                    document.getElementById('key-success-modal').classList.remove('hidden');
+
+                } else {
+                    alert(`❌ Failed: ${data.detail || 'Rejection from backend'}`);
+                }
+            } catch (err) { 
+                alert("Error connecting to server. Is main.py running?"); 
+            } finally {
+                genBtn.disabled = false;
+                genBtn.innerText = "Assign to Retail Slot";
+            }
+        }
+
+        async function adjustKeyTTL(targetKey, action, seconds = 0) {
+            try {
+                const response = await fetch('/admin/keys/adjust_expiry', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json', 
+                        'X-Admin-Key': storedAdminKey 
+                    },
+                    body: JSON.stringify({ target_key: targetKey, action: action, seconds: seconds })
+                });
+
+                const data = await response.json();
+                if (response.ok) fetchActiveKeys();
+                else alert(`❌ Action Failed: ${data.detail || 'Server rejection'}`);
+            } catch (err) {
+                alert("Error connecting to server.");
+            }
+        }
+
+        async function resetKeyIp(targetKey) {
+            if (!confirm(`Unlock IP binding for key [${targetKey}]?`)) return;
+            try {
+                const response = await fetch('/admin/keys/reset_ip', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json', 
+                        'X-Admin-Key': storedAdminKey 
+                    },
+                    body: JSON.stringify({ target_key: targetKey })
+                });
+
+                const data = await response.json();
+                if (response.ok) {
+                    fetchActiveKeys();
+                    alert("✅ IP Lock cleared successfully!");
+                } else {
+                    alert(`❌ Failed to reset IP: ${data.detail || 'Server error'}`);
+                }
+            } catch (err) {
+                alert("Error connecting to server.");
+            }
+        }
+
+        async function revokeKey(targetKey, clientName) {
+            if (targetKey === "gk(GK)321" || clientName === "GK_Master_Client") {
+                return alert("⛔ Action Blocked: Master Client Passport is permanently protected.");
+            }
+
+            if (!confirm(`Permanently revoke access and vacate slot for [${clientName}]?`)) return;
+
             try {
                 const response = await fetch('/admin/keys/revoke', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Admin-Key': storedAdminKey },
-                    body: JSON.stringify({ target_key: targetId, client_name: clientName })
+                    headers: { 
+                        'Content-Type': 'application/json', 
+                        'X-Admin-Key': storedAdminKey 
+                    },
+                    body: JSON.stringify({ target_key: targetKey, client_name: clientName })
                 });
-                if (response.ok) fetchActiveKeys();
-                else alert("Failed to revoke key.");
-            } catch (err) { alert("Error connecting to server."); }
+
+                const data = await response.json();
+                if (response.ok) {
+                    fetchActiveKeys();
+                    fetchHealthStats();
+                } else {
+                    alert(`❌ Failed: ${data.detail || 'Server error'}`);
+                }
+            } catch (err) { 
+                alert("Error connecting to server."); 
+            }
         }
 
-        /* --- WEBSOCKET LOGIC --- */
         function connectWebSocket() {
+            if (wsInstance && (wsInstance.readyState === WebSocket.OPEN || wsInstance.readyState === WebSocket.CONNECTING)) {
+                return;
+            }
+
             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
             const wsUrl = `${protocol}//${window.location.host}/ws/telemetry`;
             const wsStatus = document.getElementById('ws-status');
             
             try {
-                const ws = new WebSocket(wsUrl);
-                ws.onopen = () => {
+                wsInstance = new WebSocket(wsUrl);
+
+                wsInstance.onopen = () => {
+                    if (wsReconnectTimer) {
+                        clearTimeout(wsReconnectTimer);
+                        wsReconnectTimer = null;
+                    }
                     wsStatus.className = "text-emerald-800 bg-emerald-500/20 px-2.5 py-1 rounded-full border border-emerald-500/30 font-bold text-[11px] mono flex items-center gap-1.5 shadow-sm";
                     wsStatus.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-600 animate-ping"></span> Live WS Active`;
                 };
-                ws.onmessage = (event) => {
-                    try { updateTelemetryUI(JSON.parse(event.data)); } 
-                    catch (e) { console.error("Telemetry parsing error:", e); }
+
+                wsInstance.onmessage = (event) => {
+                    try { 
+                        updateTelemetryUI(JSON.parse(event.data)); 
+                    } catch (e) {}
                 };
-                ws.onclose = () => {
+
+                wsInstance.onclose = () => {
                     wsStatus.className = "text-rose-800 bg-rose-500/20 px-2.5 py-1 rounded-full border border-rose-500/30 font-bold text-[11px] mono flex items-center gap-1.5 shadow-sm";
-                    wsStatus.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-600"></span> Disconnected`;
-                    setTimeout(connectWebSocket, 3000);
+                    wsStatus.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-600"></span> Reconnecting...`;
+                    
+                    if (storedAdminKey && !wsReconnectTimer) {
+                        wsReconnectTimer = setTimeout(() => {
+                            wsReconnectTimer = null;
+                            connectWebSocket();
+                        }, 3000);
+                    }
                 };
-            } catch (err) { setTimeout(connectWebSocket, 3000); }
+
+                wsInstance.onerror = () => {
+                    if (wsInstance) wsInstance.close();
+                };
+            } catch (err) { 
+                if (storedAdminKey && !wsReconnectTimer) {
+                    wsReconnectTimer = setTimeout(() => {
+                        wsReconnectTimer = null;
+                        connectWebSocket();
+                    }, 3000);
+                }
+            }
         }
     </script>
 </body>
