@@ -83,7 +83,7 @@
                     <span class="w-2.5 h-2.5 rounded-full bg-emerald-600 animate-pulse"></span>
                     <h1 class="text-xs font-extrabold tracking-widest text-amber-950 uppercase mono">NANOSTREAM 4X // EXECUTIVE COMMAND</h1>
                 </div>
-                <p class="text-[11px] mono text-amber-900/80 font-medium">Hyper-Scale Enterprise Gateway // Dynamic Fleet Management</p>
+                <p class="text-[11px] mono text-amber-900/80 font-medium">Hyper-Scale Multi-Fleet Gateway // Universal Utility & Scraping Engine</p>
             </div>
             <div class="flex gap-2 bg-amber-950/5 p-1.5 rounded-xl border border-amber-950/10">
                 <button onclick="switchScreen('command')" id="btn-cmd" class="px-4 py-2 rounded-lg text-xs mono font-bold bg-blue-600 text-white shadow-md transition-all">Command Center</button>
@@ -108,7 +108,7 @@
                     <div>
                         <span class="text-[10px] mono text-amber-900/80 font-extrabold uppercase tracking-wider">Multi-Fleet Dynamic Capacity</span>
                         <h3 class="text-xs mono text-amber-950 font-extrabold mt-0.5">
-                            Companies: <span id="ui-enterprise-slots" class="text-blue-700 font-black">--</span> | Retail: <span id="ui-standard-slots" class="text-amber-800 font-black">--</span>
+                            Companies: <span id="ui-enterprise-slots" class="text-blue-700 font-black">--</span> | Retail Utilities: <span id="ui-standard-slots" class="text-amber-800 font-black">--</span>
                         </h3>
                     </div>
                     <div class="w-9 h-9 rounded-xl bg-blue-600/10 flex items-center justify-center text-blue-700 font-bold">⚡</div>
@@ -337,7 +337,7 @@
                     </div>
                     
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <input type="text" id="std-bind-ip" placeholder="Device / Tool IP (Optional: Auto-Locks on 1st use)" class="bg-white border border-amber-900/20 rounded-xl px-3 py-2 text-xs mono focus:outline-none">
+                        <input type="text" id="std-bind-ip" placeholder="Device / Tool IP (Optional: Auto-Locks on 1st use)" class="w-full bg-white border border-amber-900/20 rounded-xl px-3 py-2 text-xs mono focus:outline-none">
                         <input type="text" id="std-custom-key" placeholder="Custom API Key (Optional)" class="bg-white border border-amber-900/20 rounded-xl px-3 py-2 text-xs mono focus:outline-none">
                     </div>
 
@@ -351,7 +351,7 @@
                             <label class="flex items-center gap-1 cursor-pointer text-[11px] mono font-bold text-amber-950">
                                 <input type="checkbox" id="std-is-lifetime" onchange="toggleStdExpiry()" class="rounded border-amber-900/30"> Permanent Lifetime
                             </label>
-                            <button onclick="generateStandardKey()" id="btn-generate-std" class="w-full sm:w-auto px-5 py-2 bg-amber-800 hover:bg-amber-900 text-white font-bold text-xs mono rounded-xl shadow-md transition-all">Assign to Retail Slot</button>
+                            <button onclick="generateStandardKey()" id="btn-generate-std" class="w-full sm:w-auto px-5 py-2 bg-amber-800 hover:bg-amber-900 text-white font-bold text-xs mono rounded-xl shadow-md transition-all">Assign to Utility Slot</button>
                         </div>
                     </div>
                 </div>
@@ -548,14 +548,14 @@
                     <span class="text-[10px] text-slate-500 font-bold block mb-1">🔗 Stream Relay URL:</span>
                     <div class="flex gap-2">
                         <input type="text" id="std-dossier-stream-url" readonly class="flex-1 bg-white border border-amber-900/20 rounded-lg px-2.5 py-1.5 text-[11px] mono select-all">
-                        <button onclick="copyKeyText(document.getElementById('std-dossier-stream-url').value, this)" class="px-3 py-1.5 bg-amber-800 hover:bg-amber-900 text-white font-bold rounded-lg shadow-sm">Copy</button>
+                        <button onclick="copyKeyText(document.getElementById('std-dossier-stream-url').value, this)" class="px-3 py-1.5 bg-amber-800 hover:bg-amber-900 text-white font-bold rounded-xl shadow-sm">Copy</button>
                     </div>
                 </div>
                 <div>
                     <span class="text-[10px] text-slate-600 font-bold block mb-1">📋 Terminal Command:</span>
                     <div class="flex gap-2">
                         <input type="text" id="std-dossier-curl-cmd" readonly class="flex-1 bg-white border border-amber-900/20 rounded-lg px-2.5 py-1.5 text-[11px] mono select-all">
-                        <button onclick="copyKeyText(document.getElementById('std-dossier-curl-cmd').value, this)" class="px-3 py-1.5 bg-blue-600 text-white font-bold rounded-lg shadow-sm">Copy</button>
+                        <button onclick="copyKeyText(document.getElementById('std-dossier-curl-cmd').value, this)" class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-sm">Copy</button>
                     </div>
                 </div>
             </div>
@@ -965,8 +965,8 @@
                 const res = await fetch('/health');
                 if (res.ok) {
                     const health = await res.json();
-                    if (health.vip_pool_ips !== undefined) {
-                        document.getElementById('ui-vault-total-ips').innerText = health.vip_pool_ips;
+                    if (health.vip_proxy_ips !== undefined) {
+                        document.getElementById('ui-vault-total-ips').innerText = health.vip_proxy_ips;
                     }
                     if (health.enterprise_fleet_slots !== undefined) {
                         document.getElementById('ui-enterprise-slots').innerText = health.enterprise_fleet_slots;
