@@ -6,6 +6,7 @@ import re
 import inspect
 from datetime import datetime
 from contextlib import asynccontextmanager
+from urllib.parse import urlparse
 from fastapi import FastAPI, HTTPException, Depends, Security, Request, WebSocket, WebSocketDisconnect
 from fastapi.security import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,7 +29,12 @@ logging.basicConfig(
     datefmt='%Y-%m-%d %H:%M:%S'
 )
 
+# --- Domain & Port Settings ---
 BASE_URL = os.environ.get("BASE_URL", "https://nanostream4x.duckdns.org").rstrip('/')
+PROXY_DOMAIN = urlparse(BASE_URL).hostname or "nanostream4x.duckdns.org"
+PROXY_PORT = int(os.environ.get("PROXY_PORT", 8080))
+WEB_PORT = int(os.environ.get("PORT", 8000))
+# ------------------------------
 
 REDIS_HOST = os.environ.get("REDIS_HOST", "127.0.0.1")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", 6379))
@@ -212,7 +218,6 @@ async def proxy_supply_chain_loop():
             now = time.time()
             current_ips = await redis_vault_proxies.scard("vip_proxy_pool") or 0
             
-            # --- 100K VIP Throttling & Auto-Standby Logic ---
             MAX_VAULT_CAPACITY = 100000
             RESUME_VAULT_THRESHOLD = 99950
             if current_ips >= MAX_VAULT_CAPACITY:
@@ -567,15 +572,19 @@ async def generate_api_key(request: CreateKeyRequest):
     LOCAL_KEY_CACHE.pop(new_key, None)
     logging.info(f"KEY GENERATED -> Tier: {clean_tier.upper()} | Slot #{slot_num} | Name: {clean_client_name}")
 
-    stream_url = f"{BASE_URL}/gateway/proxy?key={new_key}&target_url="
-    ytdlp_command = f'yt-dlp --add-header "x-api-key: {new_key}" "{BASE_URL}/gateway/proxy?target_url=VIDEO_URL"'
-    curl_command = f'curl -H "x-api-key: {new_key}" "{BASE_URL}/gateway/proxy?target_url=https://httpbin.org/ip"'
+    proxy_endpoint = f"http://gk:{new_key}@{PROXY_DOMAIN}:{PROXY_PORT}"
+    ytdlp_command = f'yt-dlp --proxy "http://gk:{new_key}@{PROXY_DOMAIN}:{PROXY_PORT}" "TARGET_VIDEO_URL"'
+    curl_command = f'curl -x "http://gk:{new_key}@{PROXY_DOMAIN}:{PROXY_PORT}" "https://httpbin.org/ip"'
 
     return {
-        "message": f"{clean_tier.capitalize()} Access Passport Issued Successfully",
+        "message": "Universal Access Passport Activated",
         "api_key": new_key,
         "key_id": new_key,
-        "full_key": new_key,
+        "proxy_endpoint": proxy_endpoint,
+        "proxy_host": PROXY_DOMAIN,
+        "proxy_port": PROXY_PORT,
+        "proxy_username": "gk",
+        "proxy_password": new_key,
         "slot_number": slot_num,
         "client_name": clean_client_name,
         "tier": clean_tier,
@@ -584,10 +593,8 @@ async def generate_api_key(request: CreateKeyRequest):
         "type": key_type,
         "allocated_rps": "Unlimited (Tier 0)" if allocated_rps == 0 else f"{allocated_rps:,} req/sec",
         "bound_ip": request.bind_ip.strip() if request.bind_ip else "Unbound (Multi-Server / Cluster Ready)",
-        "stream_url": stream_url,
         "ytdlp_cmd": ytdlp_command,
-        "curl_cmd": curl_command,
-        "curl_command": curl_command
+        "curl_cmd": curl_command
     }
 
 @app.post("/admin/keys/adjust_expiry", dependencies=[Depends(verify_local_admin_shield)])
@@ -802,20 +809,18 @@ async def list_api_keys():
 
         human_data = format_bytes_to_human(byte_count)
         rps_int = int(allocated_rps) if allocated_rps else (10000 if tier == "enterprise" else 25)
-        rps_display = "Unlimited (Tier 0)" if rps_int == 0 else f"{rps_int:,} req/sec"
 
         target_timestamp = (int(time.time()) + ttl) if ttl > 0 else None
         is_active = (ttl != -2 and bool(client_name))
 
-        stream_url = f"{BASE_URL}/gateway/proxy?key={raw_key}&target_url="
-        ytdlp_command = f'yt-dlp --add-header "x-api-key: {raw_key}" "{BASE_URL}/gateway/proxy?target_url=VIDEO_URL"'
-        curl_command = f'curl -H "x-api-key: {raw_key}" "{BASE_URL}/gateway/proxy?target_url=https://httpbin.org/ip"'
-
         display_ip = bound_ip if bound_ip and bound_ip.lower() not in ["unbound", "none", "any", "all", "dynamic"] else "Unbound (Cluster Ready)"
+
+        proxy_str = f"http://gk:{raw_key}@{PROXY_DOMAIN}:{PROXY_PORT}"
+        ytdlp_cmd = f'yt-dlp --proxy "{proxy_str}" "VIDEO_URL"'
+        curl_cmd = f'curl -x "{proxy_str}" "https://httpbin.org/ip"'
 
         item = {
             "key_id": raw_key,
-            "key_prefix": raw_key,
             "full_key": raw_key,
             "slot_number": slot_number,
             "client_name": client_name,
@@ -829,13 +834,16 @@ async def list_api_keys():
             "target_timestamp": target_timestamp,
             "total_requests": req_count,
             "total_requests_display": f"{req_count:,}",
-            "allocated_rps": rps_display,
+            "allocated_rps": f"{rps_int:,} req/sec" if rps_int > 0 else "Unlimited",
             "data_usage": human_data,
             "bound_ip": display_ip,
-            "stream_url": stream_url,
-            "ytdlp_cmd": ytdlp_command,
-            "curl_cmd": curl_command,
-            "curl_command": curl_command
+            "proxy_string": proxy_str,
+            "proxy_host": PROXY_DOMAIN,
+            "proxy_port": PROXY_PORT,
+            "proxy_username": "gk",
+            "proxy_password": raw_key,
+            "ytdlp_cmd": ytdlp_cmd,
+            "curl_cmd": curl_cmd
         }
 
         if raw_key == "gk(GK)321":
@@ -920,4 +928,4 @@ app.mount("/gateway", gateway_app)
 app.include_router(gateway_app.router)
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("main:app", host="0.0.0.0", port=WEB_PORT, reload=False)
