@@ -17,7 +17,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, Response, JSONResponse
 import redis.asyncio as redis
 from cryptography.fernet import Fernet, InvalidToken
-from contextlib import asynccontextmanager
 
 warnings.filterwarnings('ignore', category=UserWarning, module='httpx')
 
@@ -220,15 +219,8 @@ async def close_gateway_resources():
     except Exception as ex:
         logging.error(f"[ENGINE 4] Error closing gateway Redis pools: {ex}")
 
-@asynccontextmanager
-async def gateway_lifespan(app_instance: FastAPI):
-    logging.info("[ENGINE 4] NanoStream Hyper-Scale Gateway operational.")
-    tcp_task = asyncio.create_task(start_background_tcp_proxy())
-    yield
-    tcp_task.cancel()
-    await close_gateway_resources()
-
-app = FastAPI(title="NanoStream 4X Hyper-Scale Gateway", version="21.0.0", lifespan=gateway_lifespan)
+# ⚠️ REMOVED @asynccontextmanager AND lifespan TO ALLOW MAIN.PY FULL CONTROL 
+app = FastAPI(title="NanoStream 4X Hyper-Scale Gateway", version="21.0.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -918,6 +910,4 @@ async def health_check():
     except Exception as e:
         return {"status": "degraded", "error": str(e)}
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("core.master4_gateway:app", host="0.0.0.0", port=8080, reload=False, workers=1)
+# ⚠️ REMOVED THE if __name__ == "__main__": BLOCK ENTIRELY
