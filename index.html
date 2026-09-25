@@ -50,7 +50,6 @@
 </head>
 <body class="p-4 md:p-8 flex flex-col justify-between selection:bg-amber-600 selection:text-white">
 
-    <!-- 🔒 1. INITIAL SYSTEM LOCK POPUP -->
     <div id="system-lock-overlay" class="fixed inset-0 bg-slate-950/80 backdrop-blur-xl z-50 flex items-center justify-center p-4">
         <div class="glass-panel p-8 rounded-3xl max-w-md w-full text-center space-y-5 shadow-2xl border border-amber-900/40">
             <div class="w-16 h-16 rounded-2xl bg-amber-800/10 border border-amber-800/30 flex items-center justify-center mx-auto text-amber-950 font-bold text-2xl animate-pulse">
@@ -73,10 +72,8 @@
         </div>
     </div>
 
-    <!-- 2. MAIN APP LAYOUT -->
     <div id="main-layout" class="max-w-4xl mx-auto w-full space-y-6 hidden">
         
-        <!-- Header -->
         <header class="glass-panel p-4 md:p-5 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4">
             <div class="space-y-0.5 text-center md:text-left">
                 <div class="flex items-center justify-center md:justify-start gap-2">
@@ -91,7 +88,6 @@
             </div>
         </header>
 
-        <!-- Command Center Screen -->
         <section id="screen-command" class="space-y-4">
             
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -115,7 +111,6 @@
                 </div>
             </div>
 
-            <!-- Instant Stream / Proxy Probe Tool -->
             <div class="glass-panel p-4 rounded-2xl border border-amber-900/20 space-y-3">
                 <div class="flex justify-between items-center text-xs mono">
                     <span class="font-bold text-amber-950 flex items-center gap-1.5">
@@ -152,10 +147,8 @@
                 </span>
             </div>
 
-            <!-- 4 Engines Grid -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 
-                <!-- Engine 1 -->
                 <div onclick="openModal('alpha')" class="glass-panel p-5 rounded-2xl engine-card cyber-blue relative overflow-hidden">
                     <div class="flex justify-between items-start mb-2 text-xs mono">
                         <span class="text-blue-700 font-extrabold tracking-wide">ENGINE 1: HUNTER</span>
@@ -169,7 +162,6 @@
                     </div>
                 </div>
 
-                <!-- Engine 2 -->
                 <div onclick="openModal('beta')" class="glass-panel p-5 rounded-2xl engine-card cyber-purple relative overflow-hidden">
                     <div class="flex justify-between items-start mb-2 text-xs mono">
                         <span class="text-purple-700 font-extrabold tracking-wide">ENGINE 2: INSPECTOR</span>
@@ -183,7 +175,6 @@
                     </div>
                 </div>
 
-                <!-- Engine 3 -->
                 <div onclick="openModal('gamma')" class="glass-panel p-5 rounded-2xl engine-card cyber-green relative overflow-hidden">
                     <div class="flex justify-between items-start mb-2 text-xs mono">
                         <span class="text-emerald-700 font-extrabold tracking-wide">ENGINE 3: DOCTOR</span>
@@ -197,7 +188,6 @@
                     </div>
                 </div>
 
-                <!-- Engine 4 -->
                 <div onclick="openModal('delta')" class="glass-panel p-5 rounded-2xl engine-card cyber-pink relative overflow-hidden">
                     <div class="flex justify-between items-start mb-2 text-xs mono">
                         <span class="text-pink-700 font-extrabold tracking-wide">ENGINE 4: GATEWAY</span>
@@ -215,10 +205,8 @@
             </div>
         </section>
 
-        <!-- Vault & Keys Screen: TWO INDEPENDENT FLEETS -->
         <section id="screen-vault" class="space-y-8 hidden">
 
-            <!-- 👑 SECURE MASTER ROOT PASSPORT CARD -->
             <div id="master-passport-card" class="glass-panel p-4 rounded-2xl border-2 border-amber-600/50 bg-amber-500/10 hidden flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                 <div class="flex items-center gap-2.5">
                     <span class="text-xl">👑</span>
@@ -233,9 +221,6 @@
                 </div>
             </div>
             
-            <!-- ==================================================================== -->
-            <!-- 🏢 SECTION A: ENTERPRISE FLEET -->
-            <!-- ==================================================================== -->
             <div class="glass-panel p-5 md:p-6 rounded-3xl shadow-xl border-2 border-blue-500/40 space-y-5">
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-blue-500/20 pb-3 gap-2">
                     <div>
@@ -250,7 +235,6 @@
                     </div>
                 </div>
 
-                <!-- Enterprise Creation Form -->
                 <div class="bg-blue-50/70 p-4 rounded-2xl border border-blue-500/20 space-y-3">
                     <span class="text-xs mono font-extrabold text-blue-950 block">➕ Issue Key for an Enterprise Slot</span>
                     
@@ -287,7 +271,6 @@
                     </div>
                 </div>
 
-                <!-- Dynamic Visual Company Slots -->
                 <div class="space-y-2.5">
                     <div class="flex justify-between items-center">
                         <span class="text-xs mono font-extrabold text-blue-950 uppercase tracking-wider">📋 Enterprise Slots Matrix (Click to Open Dossier):</span>
@@ -296,16 +279,13 @@
                 </div>
             </div>
 
-            <!-- ==================================================================== -->
-            <!-- 📱 SECTION B: DYNAMIC RETAIL / STANDARD FLEET -->
-            <!-- ==================================================================== -->
             <div class="glass-panel p-5 md:p-6 rounded-3xl shadow-xl border-2 border-amber-900/30 space-y-5">
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-amber-900/20 pb-3 gap-2">
                     <div>
                         <h3 class="text-sm mono text-amber-950 font-black uppercase flex items-center gap-2">
                             <span>📱</span> Standard / Retail Fleet (Dynamic Utility Slots)
                         </h3>
-                        <p class="text-[11px] mono text-slate-600">Numbered Slots for IMO, Amazon, Web Scraping, Testing, & Tooling (Protected by 15 RPS Shield)</p>
+                        <p class="text-[11px] mono text-slate-600">Numbered Slots for IMO, Amazon, Web Scraping, Testing, & Tooling (Protected by 25 RPS Shield)</p>
                     </div>
                     <div class="flex items-center gap-2">
                         <span id="standard-badge-count" class="text-xs mono font-black text-white bg-amber-800 px-3 py-1 rounded-xl shadow-sm">-- Slots Used</span>
@@ -313,12 +293,11 @@
                     </div>
                 </div>
 
-                <!-- Retail Creation Form with Comprehensive Purpose Selector -->
                 <div class="bg-amber-900/5 p-4 rounded-2xl border border-amber-900/10 space-y-3">
                     <span class="text-xs mono font-extrabold text-amber-950 block">➕ Issue Key for a Utility / Retail Slot</span>
                     
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        <input type="text" id="std-client-name" placeholder="User / Tool Name (e.g. Ramesh IMO / Scraper Tool)" class="bg-white border border-amber-900/20 rounded-xl px-3 py-2 text-xs mono focus:outline-none">
+                        <input type="text" id="std-client-name" placeholder="User / Tool Name (e.g. Scraper Tool / IMO Call)" class="bg-white border border-amber-900/20 rounded-xl px-3 py-2 text-xs mono focus:outline-none">
                         
                         <div class="flex items-center bg-white border border-amber-900/20 rounded-xl px-3 py-2">
                             <select id="std-purpose" class="w-full bg-transparent text-xs mono font-bold text-amber-950 focus:outline-none">
@@ -341,7 +320,6 @@
                         <input type="text" id="std-custom-key" placeholder="Custom API Key (Optional)" class="bg-white border border-amber-900/20 rounded-xl px-3 py-2 text-xs mono focus:outline-none">
                     </div>
 
-                    <!-- Calendar Date & Time Setting -->
                     <div class="flex flex-col sm:flex-row gap-2 items-center w-full pt-1 border-t border-amber-900/10">
                         <div class="flex items-center gap-1.5 w-full sm:w-auto">
                             <span class="text-[11px] mono text-amber-950 font-bold whitespace-nowrap">📅 Calendar Expiry:</span>
@@ -356,7 +334,6 @@
                     </div>
                 </div>
 
-                <!-- Search and Retail Slots Matrix -->
                 <div class="space-y-3">
                     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
                         <span class="text-xs mono font-extrabold text-amber-950 uppercase tracking-wider">📜 Active Utility & Retail Slots (Click Slot for Bio):</span>
@@ -369,7 +346,6 @@
         </section>
     </div>
 
-    <!-- ⚙️ SYSTEM FLEET SCALER MODAL -->
     <div id="scaler-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-50">
         <div class="glass-panel w-full max-w-md rounded-3xl border-2 border-blue-500/40 shadow-2xl p-6 space-y-4 text-xs mono">
             <div class="flex justify-between items-center border-b pb-3 border-blue-500/20">
@@ -403,9 +379,6 @@
         </div>
     </div>
 
-    <!-- ==================================================================== -->
-    <!-- 🏢 COMPANY DOSSIER MODAL -->
-    <!-- ==================================================================== -->
     <div id="company-dossier-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-50">
         <div class="glass-panel w-full max-w-xl rounded-3xl border-2 border-blue-500/40 shadow-2xl p-6 space-y-5 text-xs mono overflow-hidden">
             <div class="flex justify-between items-start border-b border-blue-500/20 pb-3">
@@ -484,9 +457,6 @@
         </div>
     </div>
 
-    <!-- ==================================================================== -->
-    <!-- 📱 RETAIL / STANDARD USER DOSSIER MODAL -->
-    <!-- ==================================================================== -->
     <div id="standard-dossier-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md hidden flex items-center justify-center p-4 z-50">
         <div class="glass-panel w-full max-w-xl rounded-3xl border-2 border-amber-900/40 shadow-2xl p-6 space-y-5 text-xs mono overflow-hidden">
             <div class="flex justify-between items-start border-b border-amber-900/20 pb-3">
@@ -520,7 +490,7 @@
                 </div>
                 <div class="bg-white/80 p-3 rounded-2xl border border-amber-900/15">
                     <span class="text-[10px] text-slate-500 uppercase font-extrabold block">Protection</span>
-                    <span class="text-sm font-black text-blue-900 block mt-1">15 req/sec</span>
+                    <span class="text-sm font-black text-blue-900 block mt-1">25 req/sec</span>
                     <span class="text-[9px] text-slate-400">Flood Shield active</span>
                 </div>
             </div>
@@ -570,7 +540,6 @@
         </div>
     </div>
 
-    <!-- 🗓️ TIMEZONE-IMMUNE CALENDAR & TIME PICKER MODAL -->
     <div id="calendar-modal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-md hidden flex items-center justify-center p-4 z-50">
         <div class="glass-panel w-full max-w-md rounded-3xl border border-amber-900/40 shadow-2xl p-6 space-y-4 text-xs mono">
             <div class="flex justify-between items-center border-b pb-3 border-amber-900/20">
@@ -601,7 +570,6 @@
         </div>
     </div>
 
-    <!-- 🌟 INSTANT KEY CREATED MODAL -->
     <div id="key-success-modal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-md hidden flex items-center justify-center p-4 z-50">
         <div class="glass-panel w-full max-w-lg rounded-3xl border border-emerald-600/40 shadow-2xl p-6 space-y-4 text-xs mono">
             <div class="flex justify-between items-center border-b pb-3 border-amber-900/20">
@@ -638,7 +606,6 @@
         </div>
     </div>
 
-    <!-- Telemetry Modal -->
     <div id="modal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-md hidden flex items-center justify-center p-4 z-50">
         <div class="glass-panel w-full max-w-lg rounded-3xl border border-amber-900/40 shadow-2xl flex flex-col overflow-hidden">
             <div class="flex justify-between items-center px-5 py-4 bg-amber-900/15 border-b border-amber-900/25 text-xs mono">
@@ -663,11 +630,11 @@
         
         let liveTelemetryStore = {
             hunted_count: "--", tested_count: "--", elite_passed: "--", purged_count: "--",
-            execution_time: "--", execution_speed: "--", throughput: "--", health_score: "--",
+            execution_time: "--", throughput: "--", health_score: "--",
             active_client: "--", target_domain: "--", vault_status: "--", hunter_status: "Deactivated",
             inspector_status: "Deactivated", maintenance_status: "Deactivated", 
-            gateway_status: "Deactivated", sources_active: "--", stream_scan: "Deactivated", 
-            http_status: "--", stored_proxies: [], vault_total_ips: "--"
+            gateway_status: "Deactivated", sources_active: "--", stream_scan: "Idle", 
+            http_status: "--", vault_total_ips: "--"
         };
 
         let activeModalEngine = null;
@@ -789,20 +756,6 @@
             if (isLifetime) input.value = "";
         }
 
-        function formatTTL(typeStr) {
-            if (!typeStr || typeStr === "permanent") return `<span class="text-emerald-700 font-bold">Lifetime Permanent</span>`;
-            if (typeStr.startsWith("expires_in_")) {
-                const secs = parseInt(typeStr.replace("expires_in_", "").replace("_secs", ""), 10);
-                if (isNaN(secs)) return typeStr;
-                if (secs < 60) return `<span class="text-amber-700 font-bold">${secs}s left</span>`;
-                if (secs < 3600) return `<span class="text-amber-700 font-bold">${Math.floor(secs / 60)}m ${secs % 60}s left</span>`;
-                const hrs = Math.floor(secs / 3600);
-                const mins = Math.floor((secs % 3600) / 60);
-                return `<span class="text-amber-700 font-bold">${hrs}h ${mins}m left</span>`;
-            }
-            return `<span class="text-emerald-700 font-bold">${typeStr}</span>`;
-        }
-
         function formatSourcesText(sources) {
             if (sources === undefined || sources === null || sources === "--") return "--";
             if (Array.isArray(sources)) return `${sources.length} Active Feeds`;
@@ -811,28 +764,30 @@
         }
 
         function getStatusBadge(statusVal) {
-            const isAct = statusVal && (
-                statusVal.toString().toLowerCase().includes('active') || 
-                statusVal.toString().toLowerCase().includes('running') || 
-                statusVal.toString().toLowerCase().includes('live') || 
-                statusVal.toString().toLowerCase().includes('optimized') || 
-                statusVal === true
-            );
-            return isAct 
-                ? { text: "Active", class: "bg-emerald-500/20 text-emerald-800 font-bold" } 
-                : { text: "Deactivated", class: "bg-rose-500/20 text-rose-800 font-bold" };
+            if (!statusVal) {
+                return { text: "Deactivated", class: "bg-rose-500/20 text-rose-800 font-bold" };
+            }
+            const s = statusVal.toString().toLowerCase();
+            
+            if (s.includes('active') || s.includes('running') || s.includes('live') || s.includes('optimized') || s.includes('ready')) {
+                return { text: "Active", class: "bg-emerald-500/20 text-emerald-800 font-bold" };
+            }
+            if (s.includes('idle') || s.includes('standby') || s.includes('completed')) {
+                return { text: "Idle", class: "bg-blue-500/20 text-blue-800 font-bold" };
+            }
+            return { text: "Alert", class: "bg-rose-500/20 text-rose-800 font-bold" };
         }
 
         function formatHttpStatus(status) {
             if (!status || status === "--") return `<span class="text-slate-500 font-bold">--</span>`;
             const s = status.toString();
             if (s.startsWith("2") || s.includes("200") || s.includes("206")) {
-                return `<span class="text-emerald-700 font-bold">${status}</span>`;
+                return `<span class="text-emerald-700 font-bold">${s}</span>`;
             }
             if (s.startsWith("3")) {
-                return `<span class="text-blue-700 font-bold">${status}</span>`;
+                return `<span class="text-blue-700 font-bold">${s}</span>`;
             }
-            return `<span class="text-rose-700 font-bold">${status}</span>`;
+            return `<span class="text-rose-700 font-bold">${s}</span>`;
         }
 
         function getEngineModalData(engineKey) {
@@ -910,8 +865,21 @@
 
             if (data.vault_total_ips !== undefined) {
                 document.getElementById('ui-vault-total-ips').innerText = data.vault_total_ips;
+            } else if (data.vip_proxy_ips !== undefined) {
+                document.getElementById('ui-vault-total-ips').innerText = data.vip_proxy_ips;
             } else if (data.elite_passed !== undefined) {
                 document.getElementById('ui-vault-total-ips').innerText = data.elite_passed;
+            }
+
+            if (data.enterprise_slots !== undefined) {
+                document.getElementById('ui-enterprise-slots').innerText = data.enterprise_slots;
+            } else if (data.enterprise_fleet_slots !== undefined) {
+                document.getElementById('ui-enterprise-slots').innerText = data.enterprise_fleet_slots;
+            }
+            if (data.standard_slots !== undefined) {
+                document.getElementById('ui-standard-slots').innerText = data.standard_slots;
+            } else if (data.standard_retail_slots !== undefined) {
+                document.getElementById('ui-standard-slots').innerText = data.standard_retail_slots;
             }
 
             if (data.hunted_count !== undefined) document.getElementById('ui-eng1-ips').innerText = data.hunted_count;
@@ -937,7 +905,8 @@
             if (data.stream_scan !== undefined) {
                 const streamSt = getStatusBadge(data.stream_scan);
                 const streamEl = document.getElementById('ui-eng3-stream');
-                streamEl.innerText = streamSt.text; streamEl.className = `${streamSt.class.split(' ')[1]} font-bold`;
+                streamEl.innerText = streamSt.text; 
+                streamEl.className = `${streamSt.class.split(' ')[1]} font-bold`;
             }
             if (data.maintenance_status !== undefined || data.doctor_status !== undefined) {
                 const st = getStatusBadge(data.maintenance_status !== undefined ? data.maintenance_status : data.doctor_status);
@@ -1023,7 +992,6 @@
             }
         }
 
-        /* --- ⚙️ SYSTEM FLEET SCALER MODAL CONTROLS --- */
         function openSystemScalerModal() {
             document.getElementById('scale-ent-slots').value = currentEntMaxSlots;
             document.getElementById('scale-std-slots').value = currentStdMaxSlots;
@@ -1075,7 +1043,6 @@
             }
         }
 
-        /* --- 🏢 DEEP COMPANY DOSSIER MODAL --- */
         function openCompanyDossier(slotIndex) {
             const c = globalEnterpriseClients[slotIndex];
             if (!c) return;
@@ -1137,7 +1104,6 @@
             closeCompanyDossier();
         }
 
-        /* --- 📱 DEEP STANDARD / RETAIL USER DOSSIER MODAL --- */
         function openStandardDossier(slotIndex) {
             const c = globalStandardClients[slotIndex];
             if (!c) return;
@@ -1199,7 +1165,6 @@
             closeStandardDossier();
         }
 
-        /* --- 📅 TIMEZONE-IMMUNE CALENDAR & TIME LOGIC --- */
         function openCalendarModal(keyId, clientName, targetTimestamp) {
             activeCalendarTargetKey = keyId;
             document.getElementById('cal-modal-client').innerText = clientName;
@@ -1307,7 +1272,6 @@
             });
             probeKeySelect.innerHTML = selectOptions;
 
-            // 1. Render Clean Enterprise Slots Matrix
             let entHtml = "";
             for (let slotNum = 1; slotNum <= currentEntMaxSlots; slotNum++) {
                 const c = globalEnterpriseClients.find(item => item.slot_number === slotNum);
@@ -1359,7 +1323,6 @@
             }
             entContainer.innerHTML = entHtml;
 
-            // 2. Render Retail Slots
             renderRetailSlotsList(globalStandardClients);
         }
 
@@ -1475,7 +1438,6 @@
             document.body.removeChild(ta);
         }
 
-        /* --- 🏢 GENERATE ENTERPRISE KEY --- */
         async function generateEnterpriseKey() {
             const clientName = document.getElementById('ent-company-name').value.trim();
             const countryLocation = document.getElementById('ent-country-location').value.trim();
@@ -1566,7 +1528,6 @@
             }
         }
 
-        /* --- 📱 GENERATE STANDARD KEY --- */
         async function generateStandardKey() {
             const clientName = document.getElementById('std-client-name').value.trim();
             const purpose = document.getElementById('std-purpose').value;
@@ -1596,7 +1557,7 @@
                     tier: "standard",
                     purpose: purpose,
                     country: countryLocation || "🌐 General Location",
-                    allocated_rps: 15
+                    allocated_rps: 25
                 };
                 if (customKey) payload.custom_api_key = customKey;
                 if (bindIp) payload.bind_ip = bindIp;
