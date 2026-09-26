@@ -16,7 +16,7 @@ import redis.asyncio as redis
 import logging
 import time
 import os
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union
 
 from core.master1_hunter import ProxyHunter
 from core.master2_inspector import ProxyInspector
@@ -26,8 +26,7 @@ from core.master4_gateway import (
     close_gateway_resources, 
     pool_starvation_event, 
     LOCAL_KEY_CACHE,
-    start_background_tcp_proxy,
-    set_ui_broadcaster  # <-- एडेड: गेटवे को डैशबोर्ड से लिंक करने के लिए
+    start_background_tcp_proxy  
 )
 
 logging.basicConfig(
@@ -211,7 +210,6 @@ def resilient_instantiate(cls, **kwargs):
             return cls()
 
 gateway_app.state.ui_broadcast = ui_dashboard_broadcaster
-set_ui_broadcaster(ui_dashboard_broadcaster)  # <-- एडेड: यह लाइन गेटवे को टेलीमेट्री भेजने की अनुमति देगी
 
 hunter = resilient_instantiate(ProxyHunter, ui_broadcast_callback=ui_dashboard_broadcaster)
 inspector = resilient_instantiate(ProxyInspector, ui_broadcast_callback=ui_dashboard_broadcaster)
@@ -228,15 +226,12 @@ async def proxy_supply_chain_loop():
     while True:
         try:
             now = time.time()
-            
             memory_info = await redis_vault_proxies.info('memory')
             used_memory = memory_info.get('used_memory', 0)
-            
             current_ips = await redis_vault_proxies.scard("vip_proxy_pool") or 0
             
             if used_memory >= MAX_REDIS_MEMORY_BYTES:
                 logging.info(f"[SUPPLY CHAIN MEMORY SHIELD] Redis RAM reached 12GB limit ({used_memory / (1024**3):.2f} GB). Pausing Hunter & Inspector engines to stand by...")
-                
                 while used_memory > RESUME_MEMORY_THRESHOLD_BYTES:
                     try:
                         await asyncio.sleep(15)
@@ -244,11 +239,9 @@ async def proxy_supply_chain_loop():
                         used_memory = memory_info.get('used_memory', 0)
                     except asyncio.CancelledError:
                         break
-                        
                 logging.info(f"[SUPPLY CHAIN MEMORY SHIELD] RAM headroom available ({used_memory / (1024**3):.2f} GB). Automatically resuming engines...")
 
             min_ips = getattr(doctor, 'minimum_healthy_ips', 50)
-            
             is_starved = pool_starvation_event.is_set()
             is_low_pool = (current_ips < min_ips)
             is_interval_due = (now - last_hunt_time >= PROACTIVE_HUNT_INTERVAL)
@@ -301,7 +294,6 @@ async def vault_maintenance_loop():
 @asynccontextmanager
 async def app_lifespan(app_instance: FastAPI):
     logging.info("NanoStream Booting: Hyper-Scale Event-Driven Engine Online...")
-    
     try:
         await redis_vault_keys.config_set("appendonly", "yes")
         await redis_vault_keys.config_set("appendfsync", "everysec")
@@ -333,7 +325,6 @@ async def app_lifespan(app_instance: FastAPI):
 
         if existing_tokens:
             await redis_vault_keys.sadd("active_keys_registry", *existing_tokens)
-            
             pipe = redis_vault_keys.pipeline()
             for t in existing_tokens:
                 if t != "gk(GK)321":
@@ -466,9 +457,11 @@ class CreateKeyRequest(BaseModel):
     purpose: Optional[str] = "General Media / Proxy Usage"
     expiry_seconds: Optional[int] = None
     custom_api_key: Optional[str] = None
+    custom_key: Optional[str] = None        # Dual support for index.html
     bind_ip: Optional[str] = None
+    bound_ip: Optional[str] = None         # Dual support for index.html
     country: Optional[str] = "🌐 Global / Unspecified"
-    allocated_rps: Optional[int] = 10000
+    allocated_rps: Optional[Any] = 10000
 
 class KeyRevokeRequest(BaseModel):
     client_name: Optional[str] = None
@@ -529,9 +522,10 @@ async def generate_api_key(request: CreateKeyRequest):
 
     clean_tier = "enterprise" if request.tier == "enterprise" else "standard"
     clean_country = request.country.strip() if request.country else "🌐 Global / Unspecified"
-    clean_purpose = request.purpose.strip() if request.purpose else "General Media / Proxy Usage"
+    clean_purpose = request.purpose.strip() if request.purpose else ("Enterprise Media / Scraper Core" if clean_tier == "enterprise" else "General Media / API Client")
 
-    clean_custom_key = request.custom_api_key.strip() if request.custom_api_key else None
+    raw_custom = request.custom_key or request.custom_api_key
+    clean_custom_key = raw_custom.strip() if raw_custom else None
     if clean_custom_key:
         if not SAFE_KEY_PATTERN.match(clean_custom_key):
             raise HTTPException(status_code=400, detail="Bad Request: Custom API key contains invalid characters.")
@@ -539,6 +533,9 @@ async def generate_api_key(request: CreateKeyRequest):
     prefix = "ent_" if clean_tier == "enterprise" else "std_"
     new_key = clean_custom_key if clean_custom_key else f"{prefix}{secrets.token_hex(16)}"
     redis_key_name = f"api_key:{new_key}"
+
+    target_ip = request.bound_ip or request.bind_ip
+    clean_ip = target_ip.strip() if (target_ip and target_ip.strip()) else None
 
     async with slot_allocation_lock:
         await auto_prune_expired_slots()
@@ -568,17 +565,20 @@ async def generate_api_key(request: CreateKeyRequest):
         await redis_vault_keys.set(f"api_key_purpose:{new_key}", clean_purpose)
         await redis_vault_keys.set(f"api_key_slot:{new_key}", slot_num)
 
+        try:
+            allocated_rps = int(request.allocated_rps) if request.allocated_rps is not None else (10000 if clean_tier == "enterprise" else 25)
+        except Exception:
+            allocated_rps = 10000 if clean_tier == "enterprise" else 25
+
         if clean_tier == "enterprise":
             await redis_vault_keys.sadd("enterprise_b2b_registry", new_key)
-            allocated_rps = request.allocated_rps if request.allocated_rps is not None else 10000
         else:
             await redis_vault_keys.sadd("standard_keys_registry", new_key)
-            allocated_rps = 25
 
         await redis_vault_keys.set(f"api_key_rps:{new_key}", allocated_rps)
 
-        if request.bind_ip and request.bind_ip.strip():
-            await redis_vault_keys.set(f"api_key_ip:{new_key}", request.bind_ip.strip())
+        if clean_ip:
+            await redis_vault_keys.set(f"api_key_ip:{new_key}", clean_ip)
             if request.expiry_seconds and request.expiry_seconds > 0:
                 await redis_vault_keys.expire(f"api_key_ip:{new_key}", request.expiry_seconds)
         else:
@@ -594,10 +594,11 @@ async def generate_api_key(request: CreateKeyRequest):
     ytdlp_command = f'yt-dlp --proxy "http://gk:{new_key}@{PROXY_DOMAIN}:{PROXY_PORT}" "TARGET_VIDEO_URL"'
     curl_command = f'curl -x "http://gk:{new_key}@{PROXY_DOMAIN}:{PROXY_PORT}" "https://httpbin.org/ip"'
 
-    return {
-        "message": "Universal Access Passport Activated",
+    key_payload = {
         "api_key": new_key,
+        "full_key": new_key,
         "key_id": new_key,
+        "stream_url": proxy_endpoint,
         "proxy_endpoint": proxy_endpoint,
         "proxy_host": PROXY_DOMAIN,
         "proxy_port": PROXY_PORT,
@@ -610,9 +611,15 @@ async def generate_api_key(request: CreateKeyRequest):
         "purpose": clean_purpose,
         "type": key_type,
         "allocated_rps": "Unlimited (Tier 0)" if allocated_rps == 0 else f"{allocated_rps:,} req/sec",
-        "bound_ip": request.bind_ip.strip() if request.bind_ip else "Unbound (Multi-Server / Cluster Ready)",
+        "bound_ip": clean_ip if clean_ip else "Unbound (Multi-Server / Cluster Ready)",
         "ytdlp_cmd": ytdlp_command,
         "curl_cmd": curl_command
+    }
+
+    return {
+        "message": "Universal Access Passport Activated",
+        "key_data": key_payload,
+        **key_payload
     }
 
 @app.post("/admin/keys/adjust_expiry", dependencies=[Depends(verify_local_admin_shield)])
@@ -629,7 +636,8 @@ async def adjust_key_expiry(request: AdjustExpiryRequest):
 
     current_ttl = await redis_vault_keys.ttl(redis_key)
 
-    if request.action == "set_lifetime":
+    # Supports both 'lifetime' (from index.html) and 'set_lifetime'
+    if request.action in ["lifetime", "set_lifetime"]:
         await redis_vault_keys.persist(redis_key)
         await redis_vault_keys.persist(f"api_key_ip:{raw_token}")
         LOCAL_KEY_CACHE.pop(raw_token, None)
@@ -684,7 +692,7 @@ async def adjust_key_expiry(request: AdjustExpiryRequest):
         LOCAL_KEY_CACHE.pop(raw_token, None)
         return {"status": "success", "message": f"Key expiry set to {request.seconds}s.", "new_ttl": request.seconds}
 
-    raise HTTPException(status_code=400, detail="Invalid action. Choose: set_datetime, extend, reduce, set_lifetime, set_seconds.")
+    raise HTTPException(status_code=400, detail="Invalid action. Choose: set_datetime, extend, reduce, set_lifetime, lifetime, set_seconds.")
 
 @app.post("/admin/keys/reset_ip", dependencies=[Depends(verify_local_admin_shield)])
 async def reset_key_ip_lock(request: ResetIpRequest):
@@ -697,31 +705,38 @@ async def reset_key_ip_lock(request: ResetIpRequest):
     logging.info(f"ADMIN ACTION -> Reset IP lock for key: {raw_token} (Set to Unbound)")
     return {"status": "success", "message": f"IP lock cleared for {raw_token}. It is now unrestricted and cluster-ready."}
 
+# DUAL REVOKE SUPPORT:
+# 1. DELETE method for index.html (?key_id=...)
+@app.delete("/admin/keys/revoke", dependencies=[Depends(verify_local_admin_shield)])
+async def revoke_api_key_by_query(key_id: Optional[str] = None):
+    if not key_id:
+        raise HTTPException(status_code=400, detail="key_id parameter is required.")
+    raw_token = key_id.strip().replace("api_key:", "")
+    if raw_token in ["gk(GK)321", "GK_Master_Client"]:
+        raise HTTPException(status_code=403, detail="Forbidden: Cannot revoke Master Client Passport.")
+
+    full_redis_key = f"api_key:{raw_token}"
+    deleted = await redis_vault_keys.delete(full_redis_key)
+    await redis_vault_keys.delete(
+        f"api_key_ip:{raw_token}", f"api_key_rps:{raw_token}", f"api_key_tier:{raw_token}",
+        f"api_key_country:{raw_token}", f"api_key_purpose:{raw_token}", f"api_key_slot:{raw_token}",
+        f"request_count:{raw_token}", f"data_usage_bytes:{raw_token}"
+    )
+    await redis_vault_keys.srem("active_keys_registry", raw_token)
+    await redis_vault_keys.srem("enterprise_b2b_registry", raw_token)
+    await redis_vault_keys.srem("standard_keys_registry", raw_token)
+    LOCAL_KEY_CACHE.pop(raw_token, None)
+    
+    if deleted:
+        logging.info(f"ADMIN ACTION -> Revoked key: {raw_token}")
+        return {"status": "success", "message": f"Revoked key: {raw_token}"}
+    raise HTTPException(status_code=404, detail="Target API Key not found in vault.")
+
+# 2. POST method for API callers (supports both target_key AND bulk client_name revoke)
 @app.post("/admin/keys/revoke", dependencies=[Depends(verify_local_admin_shield)])
 async def revoke_api_key_by_name(request: KeyRevokeRequest):
     if request.target_key:
-        clean_target = request.target_key.strip()
-        raw_token = clean_target.replace("api_key:", "")
-        if raw_token in ["gk(GK)321", "GK_Master_Client"]:
-            raise HTTPException(status_code=403, detail="Forbidden: Cannot revoke Master Client Passport.")
-
-        full_redis_key = f"api_key:{raw_token}"
-        deleted = await redis_vault_keys.delete(full_redis_key)
-        await redis_vault_keys.delete(
-            f"api_key_ip:{raw_token}", f"api_key_rps:{raw_token}", f"api_key_tier:{raw_token}",
-            f"api_key_country:{raw_token}", f"api_key_purpose:{raw_token}", f"api_key_slot:{raw_token}",
-            f"request_count:{raw_token}", f"data_usage_bytes:{raw_token}"
-        )
-        await redis_vault_keys.srem("active_keys_registry", raw_token)
-        await redis_vault_keys.srem("enterprise_b2b_registry", raw_token)
-        await redis_vault_keys.srem("standard_keys_registry", raw_token)
-        LOCAL_KEY_CACHE.pop(raw_token, None)
-        
-        if deleted:
-            logging.info(f"ADMIN ACTION -> Revoked key: {raw_token}")
-            return {"status": "success", "message": f"Revoked key: {raw_token}"}
-        else:
-            raise HTTPException(status_code=404, detail="Target API Key not found in vault.")
+        return await revoke_api_key_by_query(key_id=request.target_key)
 
     if request.client_name:
         clean_name = request.client_name.strip()
@@ -766,8 +781,11 @@ async def list_api_keys():
 
     if not all_keys:
         return {
+            "master_key": None,
             "master_client": None,
+            "enterprise_keys": [], 
             "enterprise_clients": [], 
+            "standard_keys": [], 
             "standard_clients": [], 
             "enterprise_slots_used": 0, 
             "enterprise_slots_total": ent_max,
@@ -828,7 +846,7 @@ async def list_api_keys():
         human_data = format_bytes_to_human(byte_count)
         rps_int = int(allocated_rps) if allocated_rps else (10000 if tier == "enterprise" else 25)
 
-        target_timestamp = (int(time.time()) + ttl) if ttl > 0 else None
+        target_timestamp = (int(time.time()) + ttl) if ttl > 0 else 0
         is_active = (ttl != -2 and bool(client_name))
 
         display_ip = bound_ip if bound_ip and bound_ip.lower() not in ["unbound", "none", "any", "all", "dynamic"] else "Unbound (Cluster Ready)"
@@ -879,9 +897,13 @@ async def list_api_keys():
     enterprise_clients.sort(key=lambda x: x["slot_number"])
     standard_clients.sort(key=lambda x: x["slot_number"])
 
+    # Returns both old & new naming formats so that frontend NEVER receives undefined
     return {
+        "master_key": master_client,
         "master_client": master_client,
+        "enterprise_keys": enterprise_clients,
         "enterprise_clients": enterprise_clients,
+        "standard_keys": standard_clients,
         "standard_clients": standard_clients,
         "enterprise_slots_used": len(enterprise_clients),
         "enterprise_slots_total": ent_max,
@@ -912,7 +934,8 @@ async def root_health_check():
     except Exception as e:
         return {"status": "degraded", "error": str(e)}
 
-@app.get("/")
+# Supports both GET and HEAD so that curl -I never triggers 405 Method Not Allowed
+@app.api_route("/", methods=["GET", "HEAD"])
 async def premium_dashboard():
     try:
         base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -942,13 +965,9 @@ async def premium_dashboard():
             status_code=500
         )
 
-# EXCLUSIVE FIX: Mounted under /gateway only so it NEVER overrides index.html at root (/)
 app.mount("/gateway", gateway_app)
 
 if __name__ == "__main__":
-    import os
-    import time
-    
     logging.info(f"[AUTO-HEAL] Checking and clearing Ghost Processes on ports {WEB_PORT} and {PROXY_PORT}...")
     try:
         os.system(f"fuser -k -9 {WEB_PORT}/tcp >/dev/null 2>&1")
