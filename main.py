@@ -302,7 +302,8 @@ async def app_lifespan(app_instance: FastAPI):
     except Exception as persist_err:
         logging.warning(f"[DATA PERSISTENCE] Redis CONFIG command preset by host: {persist_err}")
 
-    default_client_key = "gk(GK)321"
+    # UPDATED: Simplified Password matching Gateway changes
+    default_client_key = "gk321"
     default_client_name = "GK_Master_Client"
     redis_key_name = f"api_key:{default_client_key}"
     
@@ -327,13 +328,13 @@ async def app_lifespan(app_instance: FastAPI):
             await redis_vault_keys.sadd("active_keys_registry", *existing_tokens)
             pipe = redis_vault_keys.pipeline()
             for t in existing_tokens:
-                if t != "gk(GK)321":
+                if t != "gk321":
                     pipe.get(f"api_key_tier:{t}")
             tiers = await pipe.execute()
             
             ent_keys_to_add = []
             std_keys_to_add = []
-            for t, tier in zip([t for t in existing_tokens if t != "gk(GK)321"], tiers):
+            for t, tier in zip([t for t in existing_tokens if t != "gk321"], tiers):
                 if tier == "enterprise":
                     ent_keys_to_add.append(t)
                 else:
@@ -627,7 +628,7 @@ async def adjust_key_expiry(request: AdjustExpiryRequest):
     clean_target = request.target_key.strip()
     raw_token = clean_target.replace("api_key:", "")
 
-    if raw_token in ["gk(GK)321", "GK_Master_Client"]:
+    if raw_token in ["gk321", "GK_Master_Client"]:
         raise HTTPException(status_code=403, detail="Forbidden: Master Client Passport is permanently immortal.")
 
     redis_key = f"api_key:{raw_token}"
@@ -712,7 +713,7 @@ async def revoke_api_key_by_query(key_id: Optional[str] = None):
     if not key_id:
         raise HTTPException(status_code=400, detail="key_id parameter is required.")
     raw_token = key_id.strip().replace("api_key:", "")
-    if raw_token in ["gk(GK)321", "GK_Master_Client"]:
+    if raw_token in ["gk321", "GK_Master_Client"]:
         raise HTTPException(status_code=403, detail="Forbidden: Cannot revoke Master Client Passport.")
 
     full_redis_key = f"api_key:{raw_token}"
@@ -747,7 +748,7 @@ async def revoke_api_key_by_name(request: KeyRevokeRequest):
         revoked_count = 0
         
         for k in all_registered_keys:
-            if k == "gk(GK)321":
+            if k == "gk321":
                 continue
             stored_name = await redis_vault_keys.get(f"api_key:{k}")
             if stored_name == clean_name:
@@ -882,7 +883,7 @@ async def list_api_keys():
             "curl_cmd": curl_cmd
         }
 
-        if raw_key == "gk(GK)321":
+        if raw_key == "gk321":
             master_client = item
         elif tier == "enterprise":
             enterprise_clients.append(item)
