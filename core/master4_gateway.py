@@ -149,9 +149,9 @@ async def handle_raw_tcp_proxy(client_reader: asyncio.StreamReader, client_write
     api_key = normalize_incoming_key(raw_api_key)
     client_slot_name, tier, allocated_rps, bound_ip = await get_cached_client_profile(api_key)
     
-    # Master Key Safety Fallback
+    # Master Key Safety Fallback (ADDED "gk321" FOR SIMPLIFIED URL ENCODING)
     if not client_slot_name:
-        if api_key in ["gk(GK)321", "GK_Master_Client"]:
+        if api_key in ["gk(GK)321", "GK_Master_Client", "gk321"]:
             client_slot_name = "Master Root Client"
             tier = "enterprise"
             allocated_rps = 10000
@@ -183,20 +183,30 @@ async def handle_raw_tcp_proxy(client_reader: asyncio.StreamReader, client_write
     try:
         if method.upper() == "CONNECT":
             dest_host, dest_port = target.split(":") if ":" in target else (target, 443)
-            up_reader, up_writer = await asyncio.wait_for(asyncio.open_connection(p_parsed.hostname, p_parsed.port or 80), timeout=6.0)
-            up_writer.write(f"CONNECT {dest_host}:{dest_port} HTTP/1.1\r\nHost: {dest_host}:{dest_port}\r\n\r\n".encode())
-            await up_writer.drain()
             
-            resp = await asyncio.wait_for(up_reader.readline(), timeout=5.0)
-            if b"200" not in resp:
-                raise Exception("Upstream Rejected")
-            
-            # Drain residual upstream headers until empty line (\r\n) for clean TLS passthrough
-            while True:
-                h_line = await asyncio.wait_for(up_reader.readline(), timeout=3.0)
-                if not h_line or h_line in (b"\r\n", b"\n"):
-                    break
+            # UPSTREAM VIP PROXY CONNECT HANDLER WITH DIRECT FALLBACK
+            try:
+                up_reader, up_writer = await asyncio.wait_for(asyncio.open_connection(p_parsed.hostname, p_parsed.port or 80), timeout=6.0)
+                up_writer.write(f"CONNECT {dest_host}:{dest_port} HTTP/1.1\r\nHost: {dest_host}:{dest_port}\r\n\r\n".encode())
+                await up_writer.drain()
                 
+                resp = await asyncio.wait_for(up_reader.readline(), timeout=5.0)
+                if b"200" not in resp:
+                    raise Exception(f"Upstream Rejected CONNECT: {resp.decode(errors='ignore').strip()}")
+                
+                # Drain residual upstream headers until empty line (\r\n) for clean TLS passthrough
+                while True:
+                    h_line = await asyncio.wait_for(up_reader.readline(), timeout=3.0)
+                    if not h_line or h_line in (b"\r\n", b"\n"):
+                        break
+            except Exception as proxy_err:
+                logging.warning(f"[ENGINE 4] VIP Proxy rejected CONNECT ({proxy_err}). Using Direct Fallback to {dest_host}.")
+                if up_writer:
+                    try: up_writer.close()
+                    except: pass
+                # DIRECT FALLBACK: If VIP proxy fails, connect directly so yt-dlp doesn't drop
+                up_reader, up_writer = await asyncio.wait_for(asyncio.open_connection(dest_host, dest_port), timeout=6.0)
+
             client_writer.write(b"HTTP/1.1 200 Connection Established\r\n\r\n")
             await client_writer.drain()
                 
@@ -217,8 +227,14 @@ async def handle_raw_tcp_proxy(client_reader: asyncio.StreamReader, client_write
         for p in pending:
             p.cancel()
 
-    except Exception:
-        pass
+    except Exception as e:
+        logging.error(f"[ENGINE 4] Proxy Stream Error: {e}")
+        try:
+            # FIX: Send proper 502 instead of silently dropping the connection
+            client_writer.write(b"HTTP/1.1 502 Bad Gateway\r\nConnection: close\r\n\r\n")
+            await client_writer.drain()
+        except Exception:
+            pass
     finally:
         if up_writer:
             try:
@@ -259,7 +275,7 @@ async def close_gateway_resources():
     except Exception as ex:
         logging.error(f"[ENGINE 4] Error closing gateway Redis pools: {ex}")
 
-# ⚠️ REMOVED @asynccontextmanager AND lifespan TO ALLOW MAIN.PY FULL CONTROL 
+
 app = FastAPI(title="NanoStream 4X Hyper-Scale Gateway", version="21.0.0")
 
 app.add_middleware(
@@ -702,7 +718,8 @@ async def gateway_proxy_handler(
 
     background_tasks.add_task(redis_vault_keys.incr, f"request_count:{x_api_key}")
 
-    is_master_passport = (x_api_key in ["gk(GK)321", "GK_Master_Client"])
+    # ADDED "gk321" FOR SIMPLIFIED PASSWORDS IN REST API AS WELL
+    is_master_passport = (x_api_key in ["gk(GK)321", "GK_Master_Client", "gk321"])
 
     if not is_master_passport:
         is_explicitly_unbound = (bound_ip and bound_ip.lower() in ["unbound", "none", "any", "all", "dynamic"])
